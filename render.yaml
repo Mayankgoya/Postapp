@@ -1,12 +1,10 @@
 services:
-  # Backend: Spring Boot Web Service
+  # Backend: Spring Boot Web Service (Dockerized)
   - type: web
     name: linkedin-backend
-    env: java
+    env: docker
     plan: free
     rootDir: backend
-    buildCommand: mvn -B package -DskipTests
-    startCommand: java -jar target/*.jar
     envVars:
       - key: DATABASE_URL
         sync: false
