@@ -2,7 +2,7 @@ import axios from 'react'; // Actually, let's use the default export logic
 import baseAxios from 'axios';
 
 const api = baseAxios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
 });
 
 api.interceptors.request.use((config) => {
