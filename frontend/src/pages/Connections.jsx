@@ -14,6 +14,7 @@ const Connections = () => {
     const [connectModalOpen, setConnectModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
     const [connectMessage, setConnectMessage] = useState('');
+    const [sentRequestIds, setSentRequestIds] = useState([]);
 
     const getImageUrl = (url) => {
         if (!url) return null;
@@ -24,21 +25,23 @@ const Connections = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [connRes, pendRes, usersRes, profileRes] = await Promise.all([
+            const [connRes, pendRes, sentRes, usersRes, profileRes] = await Promise.all([
                 api.get('/connections'),
                 api.get('/connections/pending'),
+                api.get('/connections/sent-ids'),
                 api.get('/users'),
                 api.get('/users/me')
             ]);
             setConnections(connRes.data);
             setPending(pendRes.data);
+            setSentRequestIds(sentRes.data);
             setProfile(profileRes.data);
             
             const connectedIds = connRes.data.map(u => u.id);
-            const pendingIds = pendRes.data.map(req => req.sender.id);
-            const exploreUsers = usersRes.data.filter(u => 
-                u.id !== user.id && !connectedIds.includes(u.id) && !pendingIds.includes(u.id)
-            );
+            const pendingIncomingIds = pendRes.data.map(req => req.sender.id);
+            const pendingOutgoingIds = sentRes.data;
+            
+            const exploreUsers = usersRes.data.filter(u => u.id !== user.id);
             setAllUsers(exploreUsers);
         } catch (error) {
             console.error(error);
@@ -148,7 +151,6 @@ const Connections = () => {
                                                         "{req.message}"
                                                     </div>
                                                 )}
-                                                <p className="text-xs text-indigo-400 font-bold mt-1">12 mutual connections</p>
                                             </div>
                                         </div>
                                         <div className="flex gap-3">
@@ -212,15 +214,35 @@ const Connections = () => {
                                             </Link>
                                             
                                             <div className="mt-4 w-full border-t border-gray-50 pt-4 flex flex-col items-center gap-3">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                                    <Users size={12} /> 12 mutual connections
-                                                </p>
-                                                <button 
-                                                    onClick={() => openConnectModal(u)}
-                                                    className="w-full py-2 border-2 border-indigo-600 text-indigo-600 rounded-full text-sm font-black hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 active:scale-95"
-                                                >
-                                                    <UserPlus size={16} /> Connect
-                                                </button>
+                                                {connections.find(c => c.id === u.id) ? (
+                                                    <button 
+                                                        disabled
+                                                        className="w-full py-2 border-2 border-green-600 text-green-600 rounded-full text-sm font-black bg-green-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        <UserCheck size={16} /> Connected
+                                                    </button>
+                                                ) : sentRequestIds.includes(u.id) ? (
+                                                    <button 
+                                                        disabled
+                                                        className="w-full py-2 border-2 border-gray-300 text-gray-400 rounded-full text-sm font-black bg-gray-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        Requested
+                                                    </button>
+                                                ) : pending.find(p => p.sender.id === u.id) ? (
+                                                    <button 
+                                                        disabled
+                                                        className="w-full py-2 border-2 border-indigo-400 text-indigo-400 rounded-full text-sm font-black bg-indigo-50 flex items-center justify-center gap-2"
+                                                    >
+                                                        Review Invite
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => openConnectModal(u)}
+                                                        className="w-full py-2 border-2 border-indigo-600 text-indigo-600 rounded-full text-sm font-black hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                                    >
+                                                        <UserPlus size={16} /> Connect
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

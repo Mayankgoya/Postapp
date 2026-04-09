@@ -18,5 +18,12 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     
     List<Connection> findByReceiverAndStatus(User receiver, Connection.ConnectionStatus status);
     
+    @Query("SELECT c FROM Connection c WHERE (c.sender = :u1 AND c.receiver = :u2) OR (c.sender = :u2 AND c.receiver = :u1)")
+    Optional<Connection> findBetweenUsers(@Param("u1") User u1, @Param("u2") User u2);
+
     Optional<Connection> findBySenderAndReceiver(User sender, User receiver);
+
+    List<Connection> findBySenderAndStatus(User sender, Connection.ConnectionStatus status);
+    
+    List<Connection> findBySender(User sender);
 }

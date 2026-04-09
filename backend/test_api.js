@@ -16,9 +16,9 @@ const req = http.request({
 
 req.on('error', console.error);
 req.write(JSON.stringify({
-  firstName: 'Test',
-  lastName: 'User',
+  name: 'Test User',
   email: 'test_auto@example.com',
-  password: 'password123'
+  password: 'password123',
+  otp: '123456' // Placeholder OTP
 }));
 req.end();

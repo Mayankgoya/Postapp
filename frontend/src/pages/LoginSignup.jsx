@@ -152,7 +152,7 @@ const LoginSignup = () => {
             {isLogin ? 'Please enter your details to sign in' : 'Create an account to start networking'}
         </p>
 
-        {error && !isForgotModalOpen && (
+        {error && !isOtpModalOpen && (
             <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-3 mb-6 rounded-r-lg text-sm font-bold flex items-center gap-2">
                 <X size={16} /> {error}
             </div>

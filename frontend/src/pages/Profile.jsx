@@ -12,6 +12,9 @@ const Profile = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('posts');
+    const [connectionStatus, setConnectionStatus] = useState('NONE'); // NONE, PENDING, ACCEPTED
+    const [connections, setConnections] = useState([]);
+
     
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -48,6 +51,16 @@ const Profile = () => {
             const targetId = userId || profileRes.data.id;
             const postsRes = await api.get(`/posts/user/${targetId}`);
             setPosts(postsRes.data);
+
+            if (userId && userId !== currentUser?.id) {
+                const statusRes = await api.get(`/connections/status/${userId}`);
+                setConnectionStatus(statusRes.data);
+            }
+
+            // Fetch Connections for this profile
+            const connEndpoint = userId ? `/connections/user/${userId}` : '/connections';
+            const connRes = await api.get(connEndpoint);
+            setConnections(connRes.data);
         } catch (error) {
             console.error("Error fetching profile data:", error);
             setError(error.response?.data?.message || "Failed to load profile data.");
@@ -99,6 +112,16 @@ const Profile = () => {
             alert("Failed to save profile");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleConnect = async () => {
+        if (connectionStatus !== 'NONE') return;
+        try {
+            await api.post(`/connections/request/${userId}`);
+            setConnectionStatus('PENDING');
+        } catch (err) {
+            alert("Failed to send connection request");
         }
     };
 
@@ -195,8 +218,18 @@ const Profile = () => {
                                 </>
                             ) : (
                                 <>
-                                    <button className="bg-indigo-600 text-white px-8 py-2.5 rounded-lg font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition">
-                                        Connect
+                                    <button 
+                                        onClick={handleConnect}
+                                        disabled={connectionStatus !== 'NONE'}
+                                        className={`px-8 py-2.5 rounded-lg font-bold shadow-lg transition transform active:scale-95 ${
+                                            connectionStatus === 'NONE' 
+                                            ? 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700' 
+                                            : 'bg-gray-200 text-gray-500 cursor-default uppercase text-xs tracking-widest'
+                                        }`}
+                                    >
+                                        {connectionStatus === 'NONE' && 'Connect'}
+                                        {connectionStatus === 'PENDING' && 'Requested'}
+                                        {connectionStatus === 'ACCEPTED' && 'Connected'}
                                     </button>
                                     <button className="bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition">
                                         Message
@@ -341,19 +374,41 @@ const Profile = () => {
                     {activeTab === 'friends' && (
                         <div className="bg-white rounded-2xl p-8 shadow-sm border animate-in zoom-in duration-400">
                             <h2 className="text-2xl font-extrabold text-gray-900 mb-8 border-l-4 border-indigo-600 pl-4">Professional Network</h2>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {Array.from({ length: 4 }).map((_, i) => (
-                                    <div key={i} className="flex items-center gap-4 p-4 border rounded-2xl hover:shadow-md hover:border-indigo-100 transition-all group cursor-pointer">
-                                        <div className="w-14 h-14 rounded-full bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center text-indigo-600 font-bold text-xl group-hover:scale-105 transition">
-                                            U
+                            {connections.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {connections.map((friend) => (
+                                        <div key={friend.id} className="flex items-center gap-4 p-5 border rounded-2xl hover:shadow-md hover:border-indigo-100 transition-all group cursor-pointer bg-white">
+                                            <div className="w-16 h-16 rounded-full bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center text-indigo-600 font-bold text-2xl group-hover:scale-105 transition">
+                                                {friend.profilePicture ? <img src={getImageUrl(friend.profilePicture)} alt={friend.name} className="w-full h-full object-cover rounded-full" /> : friend.name.charAt(0)}
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-extrabold text-gray-900 group-hover:text-indigo-600 transition truncate">{friend.name}</p>
+                                                <p className="text-sm text-gray-500 font-bold truncate">{friend.bio || 'Professional'}</p>
+                                            </div>
+                                            <Link to={`/profile/${friend.id}`} className="p-2 text-indigo-400 hover:text-indigo-600 transition">
+                                                <MoreHorizontal size={20} />
+                                            </Link>
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="font-extrabold text-gray-900">User {i + 1}</p>
-                                            <p className="text-xs text-gray-400 font-bold">Mutual Connection</p>
-                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="py-20 text-center space-y-4">
+                                    <div className="w-20 h-20 bg-indigo-50 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Users size={32} />
                                     </div>
-                                ))}
-                            </div>
+                                    <h3 className="text-xl font-bold text-gray-900">No connections yet</h3>
+                                    <p className="text-gray-500 max-w-xs mx-auto">
+                                        {isOwnProfile 
+                                            ? "You haven't connected with anyone yet. Start growing your professional network to see connections here." 
+                                            : `${profile.name} doesn't have any public connections yet.`}
+                                    </p>
+                                    {isOwnProfile && (
+                                        <Link to="/connections" className="inline-block bg-indigo-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
+                                            Grow your network
+                                        </Link>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

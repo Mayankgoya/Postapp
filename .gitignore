@@ -1,0 +1,24 @@
+# Maven
+backend/target/
+*.class
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Logs and temp files
+*.log
+backend_log.txt
+backend_build.log
+boot.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

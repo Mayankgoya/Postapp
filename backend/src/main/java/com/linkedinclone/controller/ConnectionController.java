@@ -39,4 +39,19 @@ public class ConnectionController {
     public ResponseEntity<String> acceptRequest(@PathVariable Long senderId, Authentication authentication) {
         return ResponseEntity.ok(connectionService.acceptRequest(authentication.getName(), senderId));
     }
+
+    @GetMapping("/status/{targetId}")
+    public ResponseEntity<String> getStatus(@PathVariable Long targetId, Authentication authentication) {
+        return ResponseEntity.ok(connectionService.getConnectionStatus(authentication.getName(), targetId));
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<UserDto>> getConnectionsByUser(@PathVariable Long userId) {
+        return ResponseEntity.ok(connectionService.getConnectionsById(userId));
+    }
+
+    @GetMapping("/sent-ids")
+    public ResponseEntity<List<Long>> getSentRequestIds(Authentication authentication) {
+        return ResponseEntity.ok(connectionService.getSentRequestIds(authentication.getName()));
+    }
 }

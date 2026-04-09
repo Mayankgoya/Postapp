@@ -68,4 +68,29 @@ public class ConnectionService {
 
         return "Request accepted";
     }
+
+    public String getConnectionStatus(String currentUserEmail, Long targetUserId) {
+        User currentUser = userRepository.findByEmail(currentUserEmail).orElseThrow();
+        User targetUser = userRepository.findById(targetUserId).orElseThrow();
+
+        return connectionRepository.findBetweenUsers(currentUser, targetUser)
+                .map(c -> c.getStatus().toString())
+                .orElse("NONE");
+    }
+
+    public List<UserDto> getConnectionsById(Long userId) {
+        User user = userRepository.findById(userId).orElseThrow();
+        List<Connection> connections = connectionRepository.findAcceptedConnections(user);
+
+        return connections.stream()
+                .map(c -> c.getSender().getId().equals(user.getId()) ? c.getReceiver() : c.getSender())
+                .map(UserDto::new)
+                .collect(Collectors.toList());
+    }
+
+    public List<Long> getSentRequestIds(String email) {
+        User user = userRepository.findByEmail(email).orElseThrow();
+        return connectionRepository.findBySenderAndStatus(user, Connection.ConnectionStatus.PENDING)
+                .stream().map(c -> c.getReceiver().getId()).collect(Collectors.toList());
+    }
 }
