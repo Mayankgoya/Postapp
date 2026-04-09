@@ -4,28 +4,30 @@ services:
     name: linkedin-backend
     env: java
     plan: free
-    buildCommand: mvn -B package -DskipTests --file backend/pom.xml
-    startCommand: java -jar backend/target/*.jar
+    rootDir: backend
+    buildCommand: mvn -B package -DskipTests
+    startCommand: java -jar target/*.jar
     envVars:
       - key: DATABASE_URL
-        sync: false # Set manually in dashboard
+        sync: false
       - key: DATABASE_USERNAME
-        sync: false # Set manually in dashboard
+        sync: false
       - key: DATABASE_PASSWORD
-        sync: false # Set manually in dashboard
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: MAIL_USERNAME
-        sync: false # Set manually in dashboard
+        sync: false
       - key: MAIL_PASSWORD
-        sync: false # Set manually in dashboard
+        sync: false
 
   # Frontend: Static Site
   - type: web
     name: linkedin-frontend
     env: static
-    buildCommand: cd frontend && npm install && npm run build
-    publishPath: frontend/dist
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    publishPath: dist
     envVars:
       - key: VITE_API_URL
         fromService:
