@@ -22,9 +22,8 @@ services:
         sync: false
 
   # Frontend: Static Site
-  - type: web
+  - type: static
     name: linkedin-frontend
-    env: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     publishPath: dist
