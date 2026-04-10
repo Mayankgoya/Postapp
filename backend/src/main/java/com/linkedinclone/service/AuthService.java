@@ -36,11 +36,12 @@ public class AuthService {
     }
 
     public String sendForgotPasswordOtp(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
+        String normalizedEmail = email.toLowerCase().trim();
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new RuntimeException("User not found with email: " + normalizedEmail));
         
-        String otp = otpService.generateOtp(email);
-        emailService.sendOtpEmail(email, otp);
+        String otp = otpService.generateOtp(normalizedEmail);
+        emailService.sendOtpEmail(normalizedEmail, otp);
         return "OTP sent to your email!";
     }
 
@@ -49,60 +50,64 @@ public class AuthService {
     }
 
     public String resetPassword(String email, String otp, String newPassword) {
-        if (!otpService.verifyOtp(email, otp)) {
+        String normalizedEmail = email.toLowerCase().trim();
+        if (!otpService.verifyOtp(normalizedEmail, otp)) {
             throw new RuntimeException("Invalid or expired OTP!");
         }
         
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new RuntimeException("User not found!"));
         
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
-        otpService.clearOtp(email);
+        otpService.clearOtp(normalizedEmail);
         
         return "Password reset successful!";
     }
 
     public JwtAuthResponse login(LoginDto loginDto) {
+        String normalizedEmail = loginDto.getEmail().toLowerCase().trim();
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(loginDto.getEmail(), loginDto.getPassword())
+                new UsernamePasswordAuthenticationToken(normalizedEmail, loginDto.getPassword())
         );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         String token = tokenProvider.generateToken(authentication);
-        User user = userRepository.findByEmail(loginDto.getEmail()).orElseThrow();
+        User user = userRepository.findByEmail(normalizedEmail).orElseThrow();
 
         return new JwtAuthResponse(token, new UserDto(user));
     }
 
     public String sendRegistrationOtp(String email) {
-        if (userRepository.existsByEmail(email)) {
+        String normalizedEmail = email.toLowerCase().trim();
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("Email is already registered!");
         }
         
-        String otp = otpService.generateOtp(email);
-        emailService.sendOtpEmail(email, otp);
+        String otp = otpService.generateOtp(normalizedEmail);
+        emailService.sendOtpEmail(normalizedEmail, otp);
         return "Registration OTP sent to your email!";
     }
 
     public String register(RegisterDto registerDto) {
-        if (!otpService.verifyOtp(registerDto.getEmail(), registerDto.getOtp())) {
+        String normalizedEmail = registerDto.getEmail().toLowerCase().trim();
+        if (!otpService.verifyOtp(normalizedEmail, registerDto.getOtp())) {
             throw new RuntimeException("Invalid or expired OTP!");
         }
 
-        if (userRepository.existsByEmail(registerDto.getEmail())) {
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("Email is already registered!");
         }
 
         User user = new User();
         user.setName(registerDto.getName());
-        user.setEmail(registerDto.getEmail());
+        user.setEmail(normalizedEmail);
         user.setPassword(passwordEncoder.encode(registerDto.getPassword()));
 
         userRepository.save(user);
-        otpService.clearOtp(registerDto.getEmail());
+        otpService.clearOtp(normalizedEmail);
 
-        return "User registered successfully for email: " + registerDto.getEmail();
+        return "User registered successfully for email: " + normalizedEmail;
     }
 }

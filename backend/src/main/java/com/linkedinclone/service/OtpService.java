@@ -11,29 +11,39 @@ public class OtpService {
     private static final long OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
     public String generateOtp(String email) {
+        String normalizedEmail = email.toLowerCase().trim();
         String otp = String.format("%06d", new Random().nextInt(1000000));
-        otpMap.put(email, new OtpData(otp, System.currentTimeMillis() + OTP_EXPIRY_MS));
+        otpMap.put(normalizedEmail, new OtpData(otp, System.currentTimeMillis() + OTP_EXPIRY_MS));
+        System.out.println("[OTP] Generated OTP for " + normalizedEmail + ": " + otp);
         return otp;
     }
 
     public boolean verifyOtp(String email, String otp) {
-        OtpData data = otpMap.get(email);
-        if (data == null) return false;
+        String normalizedEmail = email.toLowerCase().trim();
+        OtpData data = otpMap.get(normalizedEmail);
+        
+        if (data == null) {
+            System.out.println("[OTP] Verification failed: No OTP found for " + normalizedEmail);
+            return false;
+        }
         
         if (System.currentTimeMillis() > data.expiryTime) {
-            otpMap.remove(email);
+            System.out.println("[OTP] Verification failed: OTP expired for " + normalizedEmail);
+            otpMap.remove(normalizedEmail);
             return false;
         }
         
         boolean isValid = data.otp.equals(otp);
-        if (isValid) {
-            // Keep it for the next step (password reset) but we could also mark it as verified
+        if (!isValid) {
+            System.out.println("[OTP] Verification failed: Mismatched OTP for " + normalizedEmail + ". Expected: " + data.otp + ", Got: " + otp);
+        } else {
+            System.out.println("[OTP] Verification successful for " + normalizedEmail);
         }
         return isValid;
     }
 
     public void clearOtp(String email) {
-        otpMap.remove(email);
+        otpMap.remove(email.toLowerCase().trim());
     }
 
     private static class OtpData {

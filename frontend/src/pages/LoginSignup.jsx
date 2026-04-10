@@ -35,14 +35,15 @@ const LoginSignup = () => {
     e.preventDefault();
     setError('');
     setIsProcessing(true);
+    const trimmedEmail = formData.email.trim();
     try {
       if (isLogin) {
-        await login(formData.email, formData.password);
+        await login(trimmedEmail, formData.password.trim());
         navigate('/');
       } else {
         // Registration Flow with OTP
-        await api.post(`/auth/registration-otp?email=${formData.email}`);
-        setResetEmail(formData.email);
+        await api.post(`/auth/registration-otp?email=${trimmedEmail}`);
+        setResetEmail(trimmedEmail);
         setModalMode('register');
         setIsOtpModalOpen(true);
         setOtpStep(2); // Go straight to entering OTP
@@ -57,8 +58,9 @@ const LoginSignup = () => {
   const handleRegisterConfirm = async () => {
     setIsProcessing(true);
     setError('');
+    const otp = resetOtp.trim();
     try {
-        await register(formData.name, formData.email, formData.password, resetOtp);
+        await register(formData.name.trim(), formData.email.trim(), formData.password.trim(), otp);
         setSuccess(true);
         setTimeout(() => {
             setIsOtpModalOpen(false);
@@ -89,11 +91,12 @@ const LoginSignup = () => {
   };
 
   const handleVerifyOtp = async () => {
-    if (!resetOtp) return;
+    const otp = resetOtp.trim();
+    if (!otp) return;
     setIsProcessing(true);
     setError('');
     try {
-        const res = await api.post(`/auth/verify-otp?email=${resetEmail}&otp=${resetOtp}`);
+        const res = await api.post(`/auth/verify-otp?email=${resetEmail}&otp=${otp}`);
         if (res.data === true) {
             if (modalMode === 'register') {
                 handleRegisterConfirm();
