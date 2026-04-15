@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { User, Info, Users, ThumbsUp, MessageSquare, MoreHorizontal, Camera, Edit, Save, Upload, Briefcase, MapPin, Link as LinkIcon, Calendar } from 'lucide-react';
+import { User, Info, Users, ThumbsUp, MessageSquare, MoreHorizontal, Camera, Edit, Save, Upload, Briefcase, MapPin, Link as LinkIcon, Calendar, CheckCircle } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -24,7 +24,7 @@ const Profile = () => {
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [editData, setEditData] = useState({ name: '', bio: '', skills: '' });
+    const [editData, setEditData] = useState({ name: '', bio: '', skills: '', location: '' });
     const [isSaving, setIsSaving] = useState(false);
 
     const avatarInputRef = useRef(null);
@@ -51,7 +51,8 @@ const Profile = () => {
             setEditData({
                 name: profileRes.data.name || '',
                 bio: profileRes.data.bio || '',
-                skills: profileRes.data.skills || ''
+                skills: profileRes.data.skills || '',
+                location: profileRes.data.location || ''
             });
 
             const targetId = userId || profileRes.data.id;
@@ -80,6 +81,10 @@ const Profile = () => {
 
         const formData = new FormData();
         formData.append('name', profile.name);
+        formData.append('bio', profile.bio || '');
+        formData.append('skills', profile.skills || '');
+        formData.append('location', profile.location || '');
+        
         if (type === 'avatar') {
             formData.append('image', file);
         } else {
@@ -96,6 +101,17 @@ const Profile = () => {
         }
     };
 
+    const handleConnect = async () => {
+        if (!userId) return;
+        try {
+            await api.post(`/connections/request/${userId}`);
+            setConnectionStatus('PENDING');
+        } catch (err) {
+            console.error("Connection request failed:", err);
+            alert("Execution failed: Pipeline saturated.");
+        }
+    };
+
     const handleSaveProfile = async () => {
         setIsSaving(true);
         try {
@@ -103,6 +119,7 @@ const Profile = () => {
             formData.append('name', editData.name);
             formData.append('bio', editData.bio);
             formData.append('skills', editData.skills);
+            formData.append('location', editData.location);
 
             const res = await api.put('/users/me', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
@@ -173,9 +190,12 @@ const Profile = () => {
             {/* Extended Header Card */}
             <Card noPadding className="overflow-hidden border-none shadow-premium-hover">
                 {/* Immersive Cover Photo */}
-                <div className="h-56 md:h-80 bg-surface-100 relative group">
+                <div 
+                    className={`h-56 md:h-80 bg-surface-100 relative group ${isOwnProfile ? 'cursor-pointer' : ''}`}
+                    onClick={() => isOwnProfile && coverInputRef.current.click()}
+                >
                     {profile.coverPicture ? (
-                        <img src={getImageUrl(profile.coverPicture)} alt="cover" className="w-full h-full object-cover" />
+                        <img src={getImageUrl(profile.coverPicture)} alt="cover" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                     ) : (
                         <div className="w-full h-full bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800" />
                     )}
@@ -183,22 +203,21 @@ const Profile = () => {
                     {isOwnProfile && (
                         <>
                             <input type="file" ref={coverInputRef} className="hidden" onChange={(e) => handleFileChange(e, 'cover')} accept="image/*" />
-                            <Button 
-                                variant="secondary" 
-                                size="sm"
-                                onClick={() => coverInputRef.current.click()}
-                                className="absolute bottom-6 right-6 backdrop-blur-md bg-white/80 border-none shadow-2xl translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
-                                leftIcon={Camera}
-                            >
-                                Edit Layout
-                            </Button>
+                            <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px]">
+                                <div className="flex flex-col items-center gap-3 transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                                    <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 shadow-2xl">
+                                        <Camera className="text-white" size={28} />
+                                    </div>
+                                    <span className="text-white font-black text-sm uppercase tracking-widest drop-shadow-md">Update Professional Banner</span>
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>
 
                 {/* Profile Identity Area */}
-                <div className="px-6 md:px-10 pb-8">
-                    <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 md:-mt-24 mb-6">
+                <div className="px-6 md:px-10 pb-8 relative z-20">
+                    <div className="flex flex-col md:flex-row items-center md:items-end gap-10 md:gap-14 -mt-10 md:-mt-16 mb-8">
                         {/* High-Resolution Avatar */}
                         <div className="relative group shrink-0">
                             <div className="w-36 h-36 md:w-48 md:h-48 rounded-3xl border-8 border-white bg-brand-600 flex items-center justify-center text-white text-7xl font-black shadow-2xl overflow-hidden relative transition-transform group-hover:scale-105">
@@ -221,10 +240,18 @@ const Profile = () => {
                         </div>
 
                         {/* Visual Hierarchy: Name & Status */}
-                        <div className="flex-1 text-center md:text-left mb-2">
-                            <div className="flex flex-col md:flex-row items-center gap-3">
-                              <h1 className="text-3xl md:text-5xl font-black text-surface-900 tracking-tight leading-none">{profile.name}</h1>
-                              <Badge variant="primary" size="lg" className="mt-1 md:mt-2">Pro Member</Badge>
+                        <div className="flex-1 text-center md:text-left pt-6 md:pt-16 uppercase-none">
+                            <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
+                              <h1 className="text-3xl md:text-5xl font-black text-surface-900 tracking-tighter leading-tight flex items-center gap-2 group/name cursor-default transition-all duration-300 hover:scale-[1.02]">
+                                <span className="relative">
+                                  {profile.name}
+                                  <span className="absolute -bottom-1 left-0 w-0 h-1 bg-brand-600 transition-all duration-300 group-hover/name:w-full rounded-full" />
+                                </span>
+                                <CheckCircle size={28} className="text-brand-500 fill-brand-50 transition-transform group-hover/name:rotate-12" />
+                              </h1>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="primary" size="md" className="px-4 py-1.5 shadow-premium bg-brand-600 text-white rounded-xl border border-brand-400">PostApp Prime</Badge>
+                              </div>
                             </div>
                             <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 mt-4 text-surface-500 font-bold">
                                 <div className="flex items-center gap-1.5 hover:text-brand-600 transition-colors cursor-pointer">
@@ -234,7 +261,7 @@ const Profile = () => {
                                 <span className="text-surface-200 hidden sm:block">|</span>
                                 <div className="flex items-center gap-1.5">
                                   <MapPin size={18} />
-                                  <span>Silicon Valley, CA</span>
+                                  <span>{profile.location || 'Professional Hub'}</span>
                                 </div>
                             </div>
                         </div>
@@ -443,7 +470,7 @@ const Profile = () => {
                             {connections.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {connections.map((friend) => (
-                                        <div key={friend.id} className="flex items-center gap-4 p-5 border border-surface-100 rounded-2xl hover:shadow-premium hover:border-brand-200 transition-all group bg-white">
+                                        <Link key={friend.id} to={`/profile/${friend.id}`} className="flex items-center gap-4 p-5 border border-surface-100 rounded-2xl hover:shadow-premium hover:border-brand-200 transition-all group bg-white cursor-pointer">
                                             <div className="w-14 h-14 rounded-xl bg-brand-50 border-2 border-white shadow-sm flex items-center justify-center text-brand-600 font-black text-xl group-hover:scale-105 transition-transform overflow-hidden">
                                                 {friend.profilePicture ? <img src={getImageUrl(friend.profilePicture)} alt={friend.name} className="w-full h-full object-cover" /> : friend.name.charAt(0)}
                                             </div>
@@ -451,10 +478,10 @@ const Profile = () => {
                                                 <p className="font-black text-surface-900 group-hover:text-brand-600 transition-colors truncate leading-tight">{friend.name}</p>
                                                 <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest truncate mt-0.5">{friend.bio || 'Pro Member'}</p>
                                             </div>
-                                            <Button as={Link} to={`/profile/${friend.id}`} variant="ghost" size="sm" className="p-2 rounded-xl">
+                                            <Button variant="ghost" size="sm" className="p-2 rounded-xl">
                                                 <LinkIcon size={18} />
                                             </Button>
-                                        </div>
+                                        </Link>
                                     ))}
                                 </div>
                             ) : (
@@ -521,6 +548,12 @@ const Profile = () => {
                         value={editData.skills}
                         onChange={(e) => setEditData({...editData, skills: e.target.value})}
                         placeholder="React, Architecture, Vision"
+                    />
+                    <Input 
+                        label="Primary Location" 
+                        value={editData.location}
+                        onChange={(e) => setEditData({...editData, location: e.target.value})}
+                        placeholder="Ex: Silicon Valley, CA"
                     />
                 </div>
             </Modal>

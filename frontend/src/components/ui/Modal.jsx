@@ -51,8 +51,8 @@ const Modal = ({
           )}
         </div>
         
-        {/* Body */}
-        <div className="p-8">
+        {/* Body - Scrollable Area */}
+        <div className="p-8 overflow-y-auto max-h-[calc(90vh-160px)] custom-scrollbar">
           {children}
         </div>
         

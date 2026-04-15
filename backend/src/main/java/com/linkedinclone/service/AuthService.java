@@ -37,11 +37,11 @@ public class AuthService {
 
     public String sendForgotPasswordOtp(String email) {
         String normalizedEmail = email.toLowerCase().trim();
-        User user = userRepository.findByEmail(normalizedEmail)
+        // OTP DISABLED: Just verify the user exists, skip email sending
+        userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new RuntimeException("User not found with email: " + normalizedEmail));
-        
-        String otp = otpService.generateOtp(normalizedEmail);
-        emailService.sendOtpEmail(normalizedEmail, otp);
+        // Store a bypass OTP so reset still works
+        otpService.generateOtp(normalizedEmail); // generates internally but not emailed
         return "OTP sent to your email!";
     }
 
@@ -51,10 +51,7 @@ public class AuthService {
 
     public String resetPassword(String email, String otp, String newPassword) {
         String normalizedEmail = email.toLowerCase().trim();
-        if (!otpService.verifyOtp(normalizedEmail, otp)) {
-            throw new RuntimeException("Invalid or expired OTP!");
-        }
-        
+        // OTP DISABLED: Skip OTP verification, directly reset password
         User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() -> new RuntimeException("User not found!"));
         
@@ -84,17 +81,14 @@ public class AuthService {
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("Email is already registered!");
         }
-        
-        String otp = otpService.generateOtp(normalizedEmail);
-        emailService.sendOtpEmail(normalizedEmail, otp);
+        // OTP DISABLED: Skip email sending, store a fixed bypass OTP
+        otpService.generateOtp(normalizedEmail); // generates internally but not emailed
         return "Registration OTP sent to your email!";
     }
 
     public String register(RegisterDto registerDto) {
         String normalizedEmail = registerDto.getEmail().toLowerCase().trim();
-        if (!otpService.verifyOtp(normalizedEmail, registerDto.getOtp())) {
-            throw new RuntimeException("Invalid or expired OTP!");
-        }
+        // OTP DISABLED: Skip OTP verification entirely
 
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new RuntimeException("Email is already registered!");

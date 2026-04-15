@@ -44,10 +44,14 @@ const LoginSignup = () => {
         await login(trimmedEmail, formData.password.trim());
         navigate('/');
       } else {
-        await api.post(`/auth/registration-otp?email=${encodeURIComponent(trimmedEmail)}`);
-        setResetEmail(trimmedEmail);
-        setModalMode('register');
-        setIsOtpModalOpen(true);
+        // OTP DISABLED: Register directly without OTP verification
+        await register(formData.name.trim(), trimmedEmail, formData.password.trim(), '');
+        setSuccess(true);
+        setTimeout(() => {
+          setIsLogin(true);
+          setSuccess(false);
+          setFormData({ name: '', email: '', password: '' });
+        }, 1500);
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Something went wrong');
@@ -83,7 +87,8 @@ const LoginSignup = () => {
     try {
         await api.post(`/auth/forgot-password?email=${encodeURIComponent(resetEmail)}`);
         setModalMode('forgot');
-        setResetStep(2);
+        // OTP DISABLED: Skip OTP entry, go directly to new password step
+        setResetStep(3);
     } catch (err) {
         setError(err.response?.data?.message || "Failed to send OTP. Check your email.");
     } finally {
@@ -119,9 +124,10 @@ const LoginSignup = () => {
     setIsProcessing(true);
     setError('');
     try {
+        // OTP DISABLED: Send empty string for OTP, backend skips verification
         await api.post('/auth/reset-password', {
             email: resetEmail,
-            otp: resetOtp,
+            otp: '',
             newPassword: newPassword
         });
         setSuccess(true);
@@ -155,6 +161,12 @@ const LoginSignup = () => {
         <p className="text-center text-surface-500 text-sm mb-8 font-medium">
             {isLogin ? 'Enter your details to sign in to your professional hub' : 'Create an account to start networking globally'}
         </p>
+
+        {success && !isOtpModalOpen && (
+            <div className="bg-green-50 text-green-600 p-4 mb-6 rounded-xl text-sm font-bold flex items-center gap-3 border border-green-100">
+                <CheckCircle size={18} /> Account created! Redirecting to login...
+            </div>
+        )}
 
         {error && !isOtpModalOpen && (
             <div className="bg-red-50 text-red-600 p-4 mb-6 rounded-xl text-sm font-bold flex items-center gap-3 border border-red-100 animate-in shake-1 duration-300">

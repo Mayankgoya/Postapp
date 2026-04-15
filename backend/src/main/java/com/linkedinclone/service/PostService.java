@@ -154,6 +154,7 @@ public class PostService {
         }
 
         Post post = comment.getPost();
+        post.getComments().remove(comment);
         commentRepository.delete(comment);
         
         User user = userRepository.findByEmail(email).orElseThrow();

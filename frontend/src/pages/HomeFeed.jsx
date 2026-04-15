@@ -24,6 +24,8 @@ const HomeFeed = () => {
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [expandedComments, setExpandedComments] = useState({}); // { postId: boolean }
   const [commentTexts, setCommentTexts] = useState({}); // { postId: string }
+  const [connections, setConnections] = useState([]);
+  const [sentRequestIds, setSentRequestIds] = useState([]);
 
   const fetchPosts = async () => {
     setIsLoadingPosts(true);
@@ -46,9 +48,23 @@ const HomeFeed = () => {
     }
   };
 
+  const fetchData = async () => {
+    try {
+      const [connRes, sentRes] = await Promise.all([
+        api.get('/connections'),
+        api.get('/connections/sent-ids')
+      ]);
+      setConnections(connRes.data);
+      setSentRequestIds(sentRes.data);
+    } catch (err) {
+      console.error("Failed to fetch connectivity data", err);
+    }
+  };
+
   useEffect(() => {
     fetchPosts();
     fetchTrending();
+    fetchData();
   }, []);
 
   const handlePostSubmit = async (e) => {
@@ -180,6 +196,13 @@ const HomeFeed = () => {
   const handleSearch = async (e) => {
     const query = e.target.value;
     setSearchQuery(query);
+    if (query.startsWith('#')) {
+      // Hashtag search placeholder: in a real app this would call a hashtag endpoint
+      // For now, we'll just filter posts locally if they contain the hashtag
+      setIsSearching(false);
+      return;
+    }
+
     if (query.length > 1) {
       setIsSearching(true);
       try {
@@ -194,8 +217,40 @@ const HomeFeed = () => {
     }
   };
 
+  const handleConnect = async (targetId) => {
+    try {
+      await api.post(`/connections/request/${targetId}`);
+      setSentRequestIds([...sentRequestIds, targetId]);
+      // Alert/notification handled by UI state
+    } catch (err) {
+      console.error("Connection request failed", err);
+    }
+  };
+
+  const getStatusIcon = (targetId) => {
+    if (connections.find(c => c.id === targetId)) return <Badge variant="secondary" size="sm">Connected</Badge>;
+    if (sentRequestIds.includes(targetId)) return <Badge variant="outline" size="sm" className="opacity-60">Pending</Badge>;
+    return (
+      <Button 
+        variant="ghost" 
+        size="sm" 
+        onClick={(e) => { e.preventDefault(); handleConnect(targetId); }}
+        className="text-brand-600 hover:bg-brand-50 rounded-full p-2"
+      >
+        <UserPlus size={18} />
+      </Button>
+    );
+  };
+
   const onUpdateProfile = (updatedUser) => {
     setCurrentUser(updatedUser);
+  };
+
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http') || url.startsWith('blob:')) return url;
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   return (
@@ -204,10 +259,19 @@ const HomeFeed = () => {
       <div className="hidden md:block md:col-span-4 lg:col-span-3 space-y-4">
         {/* Profile Summary Card */}
         <Card noPadding className="group overflow-visible">
-          <div className="h-20 bg-brand-600 rounded-t-2xl relative">
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 rounded-2xl border-4 border-white bg-brand-500 text-white flex items-center justify-center text-3xl font-black shadow-lg overflow-hidden transition-transform group-hover:scale-105">
+          <div className="h-20 bg-brand-600 rounded-t-2xl relative overflow-hidden">
+            {currentUser.coverPicture && (
+              <img 
+                src={getImageUrl(currentUser.coverPicture)} 
+                alt="cover" 
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+              />
+            )}
+            <div className={`absolute inset-0 ${currentUser.coverPicture ? 'bg-black/20' : 'bg-brand-600'}`} />
+            
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 rounded-2xl border-4 border-white bg-brand-500 text-white flex items-center justify-center text-3xl font-black shadow-lg overflow-hidden transition-transform group-hover:scale-105 z-10">
               {currentUser.profilePicture ? (
-                <img src={currentUser.profilePicture} alt={currentUser.name} className="w-full h-full object-cover" />
+                <img src={getImageUrl(currentUser.profilePicture)} alt={currentUser.name} className="w-full h-full object-cover" />
               ) : currentUser.name.charAt(0)}
             </div>
           </div>
@@ -219,12 +283,12 @@ const HomeFeed = () => {
             
             <div className="mt-6 pt-6 border-t border-surface-100 flex justify-around">
                <div className="text-center">
-                  <p className="text-sm font-black text-brand-600">42</p>
+                  <p className="text-sm font-black text-brand-600">{currentUser.postCount || 0}</p>
                   <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">Posts</p>
                </div>
                <div className="h-8 w-[1px] bg-surface-100" />
                <div className="text-center">
-                  <p className="text-sm font-black text-brand-600">1.2K</p>
+                  <p className="text-sm font-black text-brand-600">{currentUser.connectionCount || 0}</p>
                   <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">Connects</p>
                </div>
             </div>
@@ -317,16 +381,16 @@ const HomeFeed = () => {
                     <div key={result.id} className="p-4 hover:bg-surface-50 flex items-center justify-between transition-colors">
                       <Link to={`/profile/${result.id}`} className="flex items-center gap-4 group flex-1">
                         <div className="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-brand-700 font-black overflow-hidden border-2 border-transparent group-hover:border-brand-500 transition-all">
-                          {result.profilePicture ? <img src={result.profilePicture} alt={result.name} className="w-full h-full object-cover" /> : result.name.charAt(0)}
+                          {result.profilePicture ? <img src={getImageUrl(result.profilePicture)} alt={result.name} className="w-full h-full object-cover" /> : result.name.charAt(0)}
                         </div>
                         <div>
                           <p className="font-black text-surface-900 group-hover:text-brand-600 transition-colors leading-tight">{result.name}</p>
                           <p className="text-xs text-surface-500 mt-0.5 line-clamp-1">{result.bio || 'PostApp Network Member'}</p>
                         </div>
                       </Link>
-                      <Button variant="ghost" size="sm" className="ml-2 text-brand-600 hover:bg-brand-50 rounded-full p-2">
-                        <UserPlus size={18} />
-                      </Button>
+                      <div className="flex items-center gap-2 ml-4">
+                        {getStatusIcon(result.id)}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -463,7 +527,7 @@ const HomeFeed = () => {
                         {post.comments.map(comment => (
                           <div key={comment.id} className="flex gap-4 animate-in fade-in duration-300">
                             <Link to={`/profile/${comment.user.id}`} className="w-9 h-9 rounded-xl bg-surface-200 flex-shrink-0 flex items-center justify-center text-xs font-black overflow-hidden border border-white shadow-sm">
-                              {comment.user.profilePicture ? <img src={comment.user.profilePicture} alt={comment.user.name} className="w-full h-full object-cover" /> : comment.user.name.charAt(0)}
+                              {comment.user.profilePicture ? <img src={getImageUrl(comment.user.profilePicture)} alt={comment.user.name} className="w-full h-full object-cover" /> : comment.user.name.charAt(0)}
                             </Link>
                             <div className={`flex-1 bg-white p-4 rounded-2xl rounded-tl-none border border-surface-200 shadow-premium group/comment ${comment.isOptimistic ? 'opacity-60' : ''}`}>
                               <div className="flex justify-between items-start mb-1.5">
@@ -507,14 +571,16 @@ const HomeFeed = () => {
                   <Link to={`/profile/${tUser.id}`} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center text-brand-700 font-black text-xs overflow-hidden border-2 border-transparent group-hover:border-brand-500 transition-all shadow-sm">
-                        {tUser.profilePicture ? <img src={tUser.profilePicture} alt={tUser.name} className="w-full h-full object-cover" /> : tUser.name.charAt(0)}
+                        {tUser.profilePicture ? <img src={getImageUrl(tUser.profilePicture)} alt={tUser.name} className="w-full h-full object-cover" /> : tUser.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-black text-surface-900 group-hover:text-brand-600 transition-colors truncate">{tUser.name}</p>
                         <p className="text-[10px] font-bold text-surface-300 uppercase tracking-widest">Growth Expert</p>
                       </div>
                     </div>
-                    <UserPlus size={16} className="text-brand-600 opacity-0 group-hover:opacity-100 transition-all translate-x-1 group-hover:translate-x-0" />
+                    <div className="ml-2">
+                      {getStatusIcon(tUser.id)}
+                    </div>
                   </Link>
                 </li>
               ))
@@ -522,7 +588,10 @@ const HomeFeed = () => {
                 <p className="text-xs text-surface-400 font-medium italic">Generating trends...</p>
             )}
             <hr className="border-surface-100" />
-            <li className="cursor-pointer group flex flex-col gap-1">
+            <li 
+              className="cursor-pointer group flex flex-col gap-1 hover:bg-brand-50/50 p-2 rounded-xl transition-all"
+              onClick={() => { setSearchQuery('#PostAppPremium'); }}
+            >
                <div className="flex justify-between items-center text-sm font-black text-surface-900 group-hover:text-brand-600 transition-colors">
                   <span>#PostAppPremium</span>
                   <Badge variant="primary" size="sm">Hot</Badge>

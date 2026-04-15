@@ -12,13 +12,20 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
     bio: user.bio || '',
     skills: user.skills || '',
     profilePicture: user.profilePicture || '',
-    imageFile: null
+    coverPicture: user.coverPicture || '',
+    location: user.location || '',
+    imageFile: null,
+    coverFile: null
   });
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     if (e.target.type === 'file') {
-      setFormData({ ...formData, imageFile: e.target.files[0], profilePicture: '' });
+      if (e.target.name === 'imageFile') {
+        setFormData({ ...formData, imageFile: e.target.files[0], profilePicture: '' });
+      } else {
+        setFormData({ ...formData, coverFile: e.target.files[0], coverPicture: '' });
+      }
     } else {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     }
@@ -32,14 +39,18 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
     data.append('name', formData.name);
     data.append('bio', formData.bio);
     data.append('skills', formData.skills);
+    data.append('location', formData.location);
     
     if (formData.imageFile) {
       data.append('image', formData.imageFile);
     }
+    if (formData.coverFile) {
+      data.append('cover', formData.coverFile);
+    }
 
     try {
       let res;
-      if (formData.imageFile) {
+      if (formData.imageFile || formData.coverFile) {
         res = await api.put('/users/me', data, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
@@ -48,7 +59,9 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
           name: formData.name,
           bio: formData.bio,
           skills: formData.skills,
-          profilePicture: formData.profilePicture
+          location: formData.location,
+          profilePicture: formData.profilePicture,
+          coverPicture: formData.coverPicture
         });
       }
       onUpdate(res.data);
@@ -113,6 +126,17 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
           <p className="text-[10px] text-surface-400 font-medium italic mt-1">Separate keywords with commas for optimal indexing.</p>
         </div>
 
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1">Primary Location</label>
+          <Input 
+            type="text" 
+            name="location" 
+            value={formData.location} 
+            onChange={handleChange}
+            placeholder="Ex: Silicon Valley, CA or Remote"
+          />
+        </div>
+
         <div className="space-y-4 pt-2">
           <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1 flex items-center gap-2">
             <Camera size={14} className="text-brand-600" /> Identity Visualization
@@ -120,6 +144,7 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
           <div className="bg-surface-50 border-2 border-dashed border-surface-200 rounded-2xl p-6 transition-all hover:bg-white hover:border-brand-200 group">
             <input 
               type="file" 
+              name="imageFile"
               accept="image/*" 
               onChange={handleChange}
               className="hidden"
@@ -150,6 +175,48 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
             value={formData.profilePicture} 
             onChange={handleChange}
             placeholder="Digital Image Direct URL (CDN Link)"
+            className="text-xs"
+          />
+        </div>
+
+        <div className="space-y-4 pt-4">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1 flex items-center gap-2">
+            <Camera size={14} className="text-brand-600" /> Background Cover Visualization
+          </label>
+          <div className="bg-surface-50 border-2 border-dashed border-surface-200 rounded-2xl p-6 transition-all hover:bg-white hover:border-brand-200 group">
+            <input 
+              type="file" 
+              name="coverFile"
+              accept="image/*" 
+              onChange={handleChange}
+              className="hidden"
+              id="modal-cover-upload"
+            />
+            <label 
+              htmlFor="modal-cover-upload"
+              className="flex flex-col items-center justify-center gap-2 cursor-pointer"
+            >
+              <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-surface-400 group-hover:text-brand-600 transition-colors">
+                <Camera size={24} />
+              </div>
+              <span className="text-xs text-surface-500 font-bold">
+                {formData.coverFile ? formData.coverFile.name : 'Upload New Background'}
+              </span>
+            </label>
+          </div>
+          
+          <div className="relative flex items-center gap-4 py-2">
+            <hr className="flex-1 border-surface-100" />
+            <span className="text-[10px] font-black text-surface-300 uppercase tracking-widest">OR</span>
+            <hr className="flex-1 border-surface-100" />
+          </div>
+
+          <Input 
+            type="text" 
+            name="coverPicture" 
+            value={formData.coverPicture} 
+            onChange={handleChange}
+            placeholder="Cover Image Direct URL"
             className="text-xs"
           />
         </div>

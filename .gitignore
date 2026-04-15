@@ -22,3 +22,5 @@ boot.log
 # OS files
 .DS_Store
 Thumbs.db
+# Local Uploads
+backend/uploads/

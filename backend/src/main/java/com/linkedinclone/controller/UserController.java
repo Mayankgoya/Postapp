@@ -36,6 +36,7 @@ public class UserController {
             @RequestParam("name") String name,
             @RequestParam(value = "bio", required = false) String bio,
             @RequestParam(value = "skills", required = false) String skills,
+            @RequestParam(value = "location", required = false) String location,
             @RequestParam(value = "image", required = false) org.springframework.web.multipart.MultipartFile imageFile,
             @RequestParam(value = "cover", required = false) org.springframework.web.multipart.MultipartFile coverFile,
             Authentication authentication) {
@@ -44,6 +45,7 @@ public class UserController {
         userDto.setName(name);
         userDto.setBio(bio);
         userDto.setSkills(skills);
+        userDto.setLocation(location);
         
         if (imageFile != null && !imageFile.isEmpty()) {
             String imageUrl = fileStorageService.storeFile(imageFile);

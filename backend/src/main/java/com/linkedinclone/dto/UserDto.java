@@ -14,6 +14,7 @@ public class UserDto {
     private String skills;
     private String profilePicture;
     private String coverPicture;
+    private String location;
     private int searchCount;
     private int postCount;
     private int connectionCount;
@@ -34,5 +35,6 @@ public class UserDto {
         this.profilePicture = user.getProfilePicture();
         this.coverPicture = user.getCoverPicture();
         this.searchCount = user.getSearchCount();
+        this.location = user.getLocation();
     }
 }

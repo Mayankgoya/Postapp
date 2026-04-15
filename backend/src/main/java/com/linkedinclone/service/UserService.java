@@ -103,6 +103,7 @@ public class UserService {
         if (userDto.getSkills() != null) user.setSkills(userDto.getSkills());
         if (userDto.getProfilePicture() != null) user.setProfilePicture(userDto.getProfilePicture());
         if (userDto.getCoverPicture() != null) user.setCoverPicture(userDto.getCoverPicture());
+        if (userDto.getLocation() != null) user.setLocation(userDto.getLocation());
         
         return convertToDto(userRepository.save(user));
     }

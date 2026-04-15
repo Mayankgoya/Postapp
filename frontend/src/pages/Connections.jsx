@@ -282,7 +282,7 @@ const Connections = () => {
                                                 <Button disabled variant="outline" className="w-full border-surface-100 text-surface-400">Awaiting Commit</Button>
                                             ) : (
                                                 <Button 
-                                                    onClick={() => openConnectModal(u)}
+                                                    onClick={(e) => { e.preventDefault(); openConnectModal(u); }}
                                                     className="w-full shadow-lg shadow-brand-100"
                                                     leftIcon={UserPlus}
                                                 >

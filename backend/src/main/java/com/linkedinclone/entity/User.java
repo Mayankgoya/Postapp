@@ -40,11 +40,14 @@ public class User {
     @Column(columnDefinition = "TEXT")
     private String profilePicture;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "cover_picture", columnDefinition = "TEXT")
     private String coverPicture;
 
     @Column(nullable = false, columnDefinition = "int default 0")
     private int searchCount = 0;
+
+    @Column(length = 100)
+    private String location;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false, columnDefinition = "DATETIME")
