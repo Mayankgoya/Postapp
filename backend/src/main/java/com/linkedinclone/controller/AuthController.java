@@ -27,26 +27,10 @@ public class AuthController {
         return ResponseEntity.ok(authService.register(registerDto));
     }
 
-    @PostMapping("/forgot-password")
-    public ResponseEntity<String> forgotPassword(@RequestParam String email) {
-        return ResponseEntity.ok(authService.sendForgotPasswordOtp(email));
-    }
-
-    @PostMapping("/registration-otp")
-    public ResponseEntity<String> registrationOtp(@RequestParam String email) {
-        return ResponseEntity.ok(authService.sendRegistrationOtp(email));
-    }
-
-    @PostMapping("/verify-otp")
-    public ResponseEntity<Boolean> verifyOtp(@RequestParam String email, @RequestParam String otp) {
-        return ResponseEntity.ok(authService.verifyOtp(email, otp));
-    }
-
     @PostMapping("/reset-password")
     public ResponseEntity<String> resetPassword(@RequestBody com.linkedinclone.dto.ResetPasswordDto resetPasswordDto) {
         return ResponseEntity.ok(authService.resetPassword(
             resetPasswordDto.getEmail(), 
-            resetPasswordDto.getOtp(), 
             resetPasswordDto.getNewPassword()
         ));
     }

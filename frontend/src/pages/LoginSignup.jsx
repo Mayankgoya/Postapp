@@ -12,14 +12,6 @@ const LoginSignup = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const [error, setError] = useState('');
-  
-  // OTP Modal States
-  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('forgot'); // 'forgot' or 'register'
-  const [resetStep, setResetStep] = useState(1); // 1: Email, 2: OTP, 3: New Password
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetOtp, setResetOtp] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -44,8 +36,7 @@ const LoginSignup = () => {
         await login(trimmedEmail, formData.password.trim());
         navigate('/');
       } else {
-        // OTP DISABLED: Register directly without OTP verification
-        await register(formData.name.trim(), trimmedEmail, formData.password.trim(), '');
+        await register(formData.name.trim(), trimmedEmail, formData.password.trim());
         setSuccess(true);
         setTimeout(() => {
           setIsLogin(true);
@@ -57,91 +48,6 @@ const LoginSignup = () => {
       setError(err.response?.data?.message || 'Something went wrong');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleRegisterConfirm = async () => {
-    setIsProcessing(true);
-    setError('');
-    const otp = resetOtp.trim();
-    try {
-        await register(formData.name.trim(), formData.email.trim(), formData.password.trim(), otp);
-        setSuccess(true);
-        setTimeout(() => {
-            setIsOtpModalOpen(false);
-            setIsLogin(true);
-            setSuccess(false);
-            setResetOtp('');
-        }, 2000);
-    } catch (err) {
-        setError(err.response?.data?.message || "Registration failed. Check your OTP.");
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const handleSendOtp = async () => {
-    if (!resetEmail) return;
-    setIsProcessing(true);
-    setError('');
-    try {
-        await api.post(`/auth/forgot-password?email=${encodeURIComponent(resetEmail)}`);
-        setModalMode('forgot');
-        // OTP DISABLED: Skip OTP entry, go directly to new password step
-        setResetStep(3);
-    } catch (err) {
-        setError(err.response?.data?.message || "Failed to send OTP. Check your email.");
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    const otp = resetOtp.trim();
-    if (!otp) return;
-    setIsProcessing(true);
-    setError('');
-    try {
-        const res = await api.post(`/auth/verify-otp?email=${encodeURIComponent(resetEmail)}&otp=${encodeURIComponent(otp)}`);
-        if (res.data === true) {
-            if (modalMode === 'register') {
-                handleRegisterConfirm();
-            } else {
-                setResetStep(3);
-            }
-        } else {
-            setError("Invalid OTP code.");
-        }
-    } catch (err) {
-        setError("Invalid or expired OTP.");
-    } finally {
-        setIsProcessing(false);
-    }
-  };
-
-  const handleResetPassword = async () => {
-    if (!newPassword) return;
-    setIsProcessing(true);
-    setError('');
-    try {
-        // OTP DISABLED: Send empty string for OTP, backend skips verification
-        await api.post('/auth/reset-password', {
-            email: resetEmail,
-            otp: '',
-            newPassword: newPassword
-        });
-        setSuccess(true);
-        setTimeout(() => {
-            setIsOtpModalOpen(false);
-            setResetStep(1);
-            setSuccess(false);
-            setResetOtp('');
-            setNewPassword('');
-        }, 2000);
-    } catch (err) {
-        setError("Failed to reset password.");
-    } finally {
-        setIsProcessing(false);
     }
   };
 
@@ -162,13 +68,13 @@ const LoginSignup = () => {
             {isLogin ? 'Enter your details to sign in to your professional hub' : 'Create an account to start networking globally'}
         </p>
 
-        {success && !isOtpModalOpen && (
+        {success && (
             <div className="bg-green-50 text-green-600 p-4 mb-6 rounded-xl text-sm font-bold flex items-center gap-3 border border-green-100">
                 <CheckCircle size={18} /> Account created! Redirecting to login...
             </div>
         )}
 
-        {error && !isOtpModalOpen && (
+        {error && (
             <div className="bg-red-50 text-red-600 p-4 mb-6 rounded-xl text-sm font-bold flex items-center gap-3 border border-red-100 animate-in shake-1 duration-300">
                 <Lock size={18} /> {error}
             </div>
@@ -201,15 +107,6 @@ const LoginSignup = () => {
           <div className="space-y-1.5">
             <div className="flex justify-between items-center px-1">
               <label className="text-xs font-black text-surface-400 uppercase tracking-widest pl-1">Password</label>
-              {isLogin && (
-                <button 
-                  type="button"
-                  onClick={() => { setModalMode('forgot'); setIsOtpModalOpen(true); setError(''); setResetStep(1); }}
-                  className="text-[11px] font-black text-brand-600 hover:text-brand-700 uppercase tracking-widest transition-colors"
-                >
-                  Forgot?
-                </button>
-              )}
             </div>
             <Input 
               type="password" 
@@ -244,99 +141,6 @@ const LoginSignup = () => {
           </p>
         </div>
       </Card>
-
-      {/* OTP & Password Reset Modal */}
-      <Modal 
-        isOpen={isOtpModalOpen} 
-        onClose={() => setIsOtpModalOpen(false)}
-        title={modalMode === 'register' ? 'Verify Your Email' : 'Reset Password'}
-      >
-        <div className="space-y-6">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold flex items-center gap-2">
-              {error}
-            </div>
-          )}
-
-          {success ? (
-            <div className="py-8 text-center animate-scale-in">
-              <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle size={40} />
-              </div>
-              <h3 className="text-2xl font-black text-surface-900 mb-2">
-                {modalMode === 'register' ? 'Verified!' : 'Reset Successful!'}
-              </h3>
-              <p className="text-surface-500 font-medium">
-                {modalMode === 'register' ? 'Your account has been created.' : 'Your password has been updated.'}
-              </p>
-            </div>
-          ) : (
-            <>
-              {(modalMode === 'forgot' && resetStep === 1) && (
-                <div className="space-y-4">
-                  <p className="text-surface-500 text-center font-medium">Enter your email and we'll send you an OTP code.</p>
-                  <Input 
-                    label="Email Address" 
-                    value={resetEmail} 
-                    onChange={(e) => setResetEmail(e.target.value)} 
-                    placeholder="your@email.com" 
-                    leftIcon={Mail}
-                  />
-                  <Button onClick={handleSendOtp} className="w-full py-4" isLoading={isProcessing}>
-                    Send OTP
-                  </Button>
-                </div>
-              )}
-
-              {((modalMode === 'forgot' && resetStep === 2) || (modalMode === 'register')) && (
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <p className="text-surface-500 font-medium mb-1">Check your inbox for a 6-digit code</p>
-                    <p className="text-brand-600 font-black text-sm">{resetEmail}</p>
-                  </div>
-                  <Input 
-                    label="6-Digit OTP" 
-                    maxLength={6} 
-                    value={resetOtp} 
-                    onChange={(e) => setResetOtp(e.target.value)} 
-                    placeholder="000000" 
-                    className="text-center text-3xl font-black tracking-[12px] placeholder:tracking-normal"
-                  />
-                  <Button 
-                    onClick={modalMode === 'register' ? handleRegisterConfirm : handleVerifyOtp} 
-                    className="w-full py-4" 
-                    isLoading={isProcessing}
-                  >
-                    Verify & Continue
-                  </Button>
-                  {modalMode === 'forgot' && (
-                    <button onClick={() => setResetStep(1)} className="w-full text-brand-600 font-bold text-sm hover:underline">
-                      Incorrect email? Try again
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {(modalMode === 'forgot' && resetStep === 3) && (
-                <div className="space-y-4">
-                  <p className="text-surface-500 font-medium text-center">OTP Verified! Create your new password.</p>
-                  <Input 
-                    label="New Password" 
-                    type="password" 
-                    value={newPassword} 
-                    onChange={(e) => setNewPassword(e.target.value)} 
-                    placeholder="••••••••" 
-                    leftIcon={Lock}
-                  />
-                  <Button onClick={handleResetPassword} className="w-full py-4" isLoading={isProcessing}>
-                    Update Password
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </Modal>
     </div>
   );
 };
