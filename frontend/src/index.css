@@ -3,7 +3,55 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --brand-primary: theme('colors.brand.600');
+    --surface-bg: theme('colors.surface.50');
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply antialiased text-linkedin-dark;
+    @apply antialiased font-sans;
+    color: theme('colors.surface.900');
+    background-color: theme('colors.surface.50');
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Premium Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-2 border-transparent bg-clip-padding transition-colors;
+    background-color: theme('colors.surface.300');
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: theme('colors.surface.400');
+  }
+
+  /* Selection styling */
+  ::selection {
+    background-color: theme('colors.brand.200');
+    color: theme('colors.brand.900');
+  }
+}
+
+@layer components {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

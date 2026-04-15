@@ -16,7 +16,7 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-linkedin-bg">
+      <div className="min-h-screen bg-surface-50">
         <Navbar />
         <main className="max-w-6xl mx-auto pt-20 px-4">
           <Routes>

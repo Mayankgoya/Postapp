@@ -19,7 +19,10 @@ public class OtpService {
     }
 
     public boolean verifyOtp(String email, String otp) {
+        if (email == null || otp == null) return false;
+
         String normalizedEmail = email.toLowerCase().trim();
+        String incomingOtp = otp.trim();
         OtpData data = otpMap.get(normalizedEmail);
         
         if (data == null) {
@@ -33,9 +36,9 @@ public class OtpService {
             return false;
         }
         
-        boolean isValid = data.otp.equals(otp);
+        boolean isValid = data.otp.equals(incomingOtp);
         if (!isValid) {
-            System.out.println("[OTP] Verification failed: Mismatched OTP for " + normalizedEmail + ". Expected: " + data.otp + ", Got: " + otp);
+            System.out.println("[OTP] Verification failed: Mismatched OTP for " + normalizedEmail + ". Expected: " + data.otp + ", Got: " + incomingOtp);
         } else {
             System.out.println("[OTP] Verification successful for " + normalizedEmail);
         }

@@ -18,6 +18,7 @@ public class Comment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @jakarta.validation.constraints.NotBlank(message = "Comment content cannot be empty")
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 

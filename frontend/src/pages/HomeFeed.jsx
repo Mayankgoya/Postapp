@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { ThumbsUp, MessageSquare, Edit, Image as ImageIcon, Search, UserPlus } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Edit, Image as ImageIcon, Search, UserPlus, TrendingUp, Filter } from 'lucide-react';
 import EditProfileModal from '../components/EditProfileModal';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import TextArea from '../components/ui/TextArea';
+import { PostSkeleton } from '../components/ui/Skeleton';
 
 const HomeFeed = () => {
   const { user } = useAuth();
@@ -15,13 +21,19 @@ const HomeFeed = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [trendingUsers, setTrendingUsers] = useState([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
+  const [expandedComments, setExpandedComments] = useState({}); // { postId: boolean }
+  const [commentTexts, setCommentTexts] = useState({}); // { postId: string }
 
   const fetchPosts = async () => {
+    setIsLoadingPosts(true);
     try {
       const res = await api.get('/posts');
       setPosts(res.data);
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsLoadingPosts(false);
     }
   };
 
@@ -69,12 +81,100 @@ const HomeFeed = () => {
   };
 
   const handleLike = async (postId) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+
+    // Optimistic Update
+    const originalPosts = [...posts];
+    const isLiking = !post.likedByCurrentUser;
+    const updatedPost = {
+      ...post,
+      likedByCurrentUser: isLiking,
+      likesCount: isLiking ? post.likesCount + 1 : Math.max(0, post.likesCount - 1)
+    };
+    setPosts(posts.map(p => p.id === postId ? updatedPost : p));
+
     try {
-      await api.post(`/posts/${postId}/like`);
-      fetchPosts(); 
+      const res = await api.post(`/posts/${postId}/like`);
+      setPosts(posts.map(p => p.id === postId ? res.data : p));
     } catch (err) {
       console.error(err);
+      setPosts(originalPosts); // Rollback on error
+      alert("Failed to synchronize reaction. Please verify connectivity.");
     }
+  };
+
+  const handleComment = async (postId) => {
+    const text = commentTexts[postId];
+    if (!text || !text.trim()) return;
+
+    const post = posts.find(p => p.id === postId);
+    const originalPosts = [...posts];
+
+    // Optimistic Update
+    const tempComment = {
+      id: Date.now(), // Temp ID
+      content: text,
+      createdAt: new Date().toISOString(),
+      user: currentUser,
+      isOptimistic: true
+    };
+    
+    const updatedPost = {
+      ...post,
+      comments: [...post.comments, tempComment]
+    };
+    setPosts(posts.map(p => p.id === postId ? updatedPost : p));
+    setCommentTexts({ ...commentTexts, [postId]: '' });
+
+    try {
+      const res = await api.post(`/posts/${postId}/comment`, { content: text });
+      setPosts(posts.map(p => p.id === postId ? res.data : p));
+    } catch (err) {
+      console.error(err);
+      setPosts(originalPosts); // Rollback
+      setCommentTexts({ ...commentTexts, [postId]: text }); // Restore text
+      alert("Failed to deliver comment. Check your connection.");
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Permanent deletion of this insight. Proceed?")) return;
+    
+    const originalPosts = [...posts];
+    setPosts(posts.filter(p => p.id !== postId));
+
+    try {
+      await api.delete(`/posts/${postId}`);
+    } catch (err) {
+      console.error(err);
+      setPosts(originalPosts);
+      alert("Unauthorized or failed deletion attempt.");
+    }
+  };
+
+  const handleDeleteComment = async (postId, commentId) => {
+    const post = posts.find(p => p.id === postId);
+    const originalPosts = [...posts];
+
+    const updatedPost = {
+      ...post,
+      comments: post.comments.filter(c => c.id !== commentId)
+    };
+    setPosts(posts.map(p => p.id === postId ? updatedPost : p));
+
+    try {
+      const res = await api.delete(`/posts/comments/${commentId}`);
+      setPosts(posts.map(p => p.id === postId ? res.data : p));
+    } catch (err) {
+      console.error(err);
+      setPosts(originalPosts);
+      alert("Permission denied for comment removal.");
+    }
+  };
+
+  const toggleComments = (postId) => {
+    setExpandedComments({ ...expandedComments, [postId]: !expandedComments[postId] });
   };
 
   const handleSearch = async (e) => {
@@ -99,195 +199,347 @@ const HomeFeed = () => {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pb-12 animate-fade-in">
       {/* Left Sidebar */}
-      <div className="hidden md:block col-span-1 space-y-4">
-        {/* Profile Info */}
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="h-16 bg-indigo-600"></div>
-          <div className="px-4 pb-4 -mt-8 flex flex-col items-center">
-            <div className="w-20 h-20 rounded-full bg-white border-4 border-white flex items-center justify-center text-3xl font-bold bg-indigo-500 text-white shadow-sm overflow-hidden mb-3">
+      <div className="hidden md:block md:col-span-4 lg:col-span-3 space-y-4">
+        {/* Profile Summary Card */}
+        <Card noPadding className="group overflow-visible">
+          <div className="h-20 bg-brand-600 rounded-t-2xl relative">
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-20 h-20 rounded-2xl border-4 border-white bg-brand-500 text-white flex items-center justify-center text-3xl font-black shadow-lg overflow-hidden transition-transform group-hover:scale-105">
               {currentUser.profilePicture ? (
                 <img src={currentUser.profilePicture} alt={currentUser.name} className="w-full h-full object-cover" />
               ) : currentUser.name.charAt(0)}
             </div>
-            <h3 className="font-bold text-lg text-gray-900">{currentUser.name}</h3>
-            <p className="text-gray-500 text-xs text-center line-clamp-2 px-2 h-8">{currentUser.bio || 'Add a bio to your profile.'}</p>
-            
-            <button 
-              onClick={() => setIsEditModalOpen(true)}
-              className="mt-4 flex items-center gap-2 text-indigo-600 hover:bg-indigo-50 px-4 py-1.5 rounded-full border border-indigo-200 text-sm font-semibold transition w-full justify-center"
-            >
-              <Edit size={16} /> Edit Profile
-            </button>
           </div>
-        </div>
+          <div className="pt-12 pb-6 px-4 text-center">
+            <h3 className="font-black text-lg text-surface-900 leading-tight">{currentUser.name}</h3>
+            <p className="text-surface-500 text-xs mt-1 font-medium line-clamp-2 px-2 h-8">
+              {currentUser.bio || 'Professional at PostApp'}
+            </p>
+            
+            <div className="mt-6 pt-6 border-t border-surface-100 flex justify-around">
+               <div className="text-center">
+                  <p className="text-sm font-black text-brand-600">42</p>
+                  <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">Posts</p>
+               </div>
+               <div className="h-8 w-[1px] bg-surface-100" />
+               <div className="text-center">
+                  <p className="text-sm font-black text-brand-600">1.2K</p>
+                  <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">Connects</p>
+               </div>
+            </div>
 
-        {/* Create Post Widget (Instagram Style) */}
-        <div className="bg-white rounded-xl shadow-sm border p-4 space-y-3">
-          <h4 className="font-bold text-sm text-gray-700 flex items-center gap-2">
-            <ImageIcon className="text-indigo-600" size={18} /> New Post
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsEditModalOpen(true)}
+              className="mt-6 w-full"
+              leftIcon={Edit}
+            >
+              Edit Profile
+            </Button>
+          </div>
+        </Card>
+
+        {/* Create Post Widget */}
+        <Card className="space-y-4">
+          <h4 className="font-black text-xs text-surface-400 uppercase tracking-widest flex items-center gap-2">
+            <ImageIcon className="text-brand-600" size={16} /> Share meaningful update
           </h4>
-          <form onSubmit={handlePostSubmit} className="space-y-3">
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase">Upload Image</label>
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleFileChange}
-                className="w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-              />
-            </div>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none text-gray-400">
-                <span className="text-[10px] font-bold">OR</span>
+          <form onSubmit={handlePostSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1">Image Attachment</label>
+              <div className="flex flex-col gap-2">
+                <input 
+                  type="file" 
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label 
+                  htmlFor="image-upload"
+                  className="w-full bg-surface-50 border-2 border-dashed border-surface-200 rounded-xl p-3 text-xs text-surface-500 flex items-center justify-center gap-2 cursor-pointer hover:border-brand-300 hover:bg-brand-50 transition-all group"
+                >
+                  <ImageIcon size={16} className="text-surface-400 group-hover:text-brand-600" />
+                  {newPost.imageFile ? newPost.imageFile.name : 'Click to upload image'}
+                </label>
+                <div className="relative">
+                  <Input 
+                    type="text" 
+                    placeholder="...or paste image URL" 
+                    value={newPost.imageUrl}
+                    onChange={(e) => setNewPost({ ...newPost, imageUrl: e.target.value, imageFile: null })}
+                    className="text-xs p-2 pl-4"
+                  />
+                </div>
               </div>
-              <input 
-                type="text" 
-                placeholder="Paste Image URL..." 
-                value={newPost.imageUrl}
-                onChange={(e) => setNewPost({ ...newPost, imageUrl: e.target.value, imageFile: null })}
-                className="w-full bg-gray-50 border rounded-lg p-2 pl-7 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-              />
             </div>
-            <textarea 
-              placeholder="Write a caption..." 
+            <TextArea 
+              placeholder="What's happening in your career?" 
               value={newPost.content}
               onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-              className="w-full bg-gray-50 border rounded-lg p-2 text-xs focus:ring-1 focus:ring-indigo-500 outline-none resize-none"
+              className="text-sm min-h-[100px]"
               rows="3"
             />
-            <button 
+            <Button 
               type="submit" 
               disabled={!newPost.content.trim()}
-              className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+              className="w-full"
             >
               Share Post
-            </button>
+            </Button>
           </form>
-        </div>
+        </Card>
       </div>
 
-      {/* Main Feed */}
-      <div className="col-span-1 md:col-span-3 lg:col-span-2 space-y-4">
-        {/* Search Bar */}
+      {/* Main Feed Area */}
+      <div className="col-span-1 md:col-span-8 lg:col-span-6 space-y-6">
+        {/* Modern Search Experience */}
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-600 transition" />
+            <Search className="h-5 w-5 text-surface-400 group-focus-within:text-brand-600 transition-colors" />
           </div>
           <input 
             type="text" 
-            placeholder="Search people by username..." 
+            placeholder="Search professional network..." 
             value={searchQuery}
             onChange={handleSearch}
-            className="w-full bg-white border border-gray-200 rounded-xl py-3 pl-12 pr-4 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition"
+            className="w-full bg-white border border-surface-200 rounded-2xl py-4 pl-12 pr-4 shadow-premium focus:ring-4 focus:ring-brand-50 focus:border-brand-600 outline-none transition-all font-medium"
           />
           
-          {/* Search Results Dropdown */}
+          {/* Enhanced Search Results */}
           {isSearching && searchQuery.length > 1 && (
-            <div className="absolute top-full mt-2 w-full bg-white border rounded-xl shadow-xl z-40 max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+            <Card noPadding className="absolute top-full mt-3 w-full z-40 max-h-96 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-300 border-brand-100 shadow-2xl">
               {searchResults.length > 0 ? (
-                searchResults.map(result => (
-                  <div key={result.id} className="p-3 hover:bg-gray-50 flex items-center justify-between border-b last:border-b-0 border-transparent hover:border-indigo-100 transition">
-                    <Link to={`/profile/${result.id}`} className="flex items-center gap-3 group">
-                      <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold overflow-hidden border-2 border-transparent group-hover:border-indigo-500 transition">
-                        {result.profilePicture ? <img src={result.profilePicture} alt={result.name} /> : result.name.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-gray-900 group-hover:text-indigo-600 transition">{result.name}</p>
-                        <p className="text-xs text-gray-500 truncate max-w-[150px]">{result.bio}</p>
-                      </div>
-                    </Link>
-                    <button className="text-indigo-600 hover:text-indigo-800 p-2 hover:bg-indigo-50 rounded-full transition">
-                      <UserPlus size={18} />
-                    </button>
-                  </div>
-                ))
+                <div className="divide-y divide-surface-100">
+                  {searchResults.map(result => (
+                    <div key={result.id} className="p-4 hover:bg-surface-50 flex items-center justify-between transition-colors">
+                      <Link to={`/profile/${result.id}`} className="flex items-center gap-4 group flex-1">
+                        <div className="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-brand-700 font-black overflow-hidden border-2 border-transparent group-hover:border-brand-500 transition-all">
+                          {result.profilePicture ? <img src={result.profilePicture} alt={result.name} className="w-full h-full object-cover" /> : result.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-black text-surface-900 group-hover:text-brand-600 transition-colors leading-tight">{result.name}</p>
+                          <p className="text-xs text-surface-500 mt-0.5 line-clamp-1">{result.bio || 'PostApp Network Member'}</p>
+                        </div>
+                      </Link>
+                      <Button variant="ghost" size="sm" className="ml-2 text-brand-600 hover:bg-brand-50 rounded-full p-2">
+                        <UserPlus size={18} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="p-6 text-center text-gray-500 text-sm">No people found matching "{searchQuery}"</div>
+                <div className="p-8 text-center text-surface-500 text-sm font-medium">
+                  We couldn't find anyone matching "{searchQuery}"
+                </div>
               )}
-            </div>
+            </Card>
           )}
         </div>
 
         {/* Posts List */}
         <div className="space-y-6">
-          <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wider px-1">Recent posts</h2>
-          {posts.map(post => (
-            <div key={post.id} className="bg-white rounded-xl shadow-sm border overflow-hidden transition hover:shadow-md">
-              <div className="p-4 flex items-center gap-3">
-                <Link to={`/profile/${post.user.id}`} className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold overflow-hidden hover:opacity-80 transition">
-                  {post.user.profilePicture ? <img src={post.user.profilePicture} alt={post.user.name} /> : post.user.name.charAt(0)}
-                </Link>
-                <div>
-                  <Link to={`/profile/${post.user.id}`} className="font-bold text-sm text-gray-900 hover:text-indigo-600 transition">{post.user.name}</Link>
-                  <p className="text-[10px] text-gray-400">{new Date(post.createdAt).toLocaleString()}</p>
-                </div>
-              </div>
-              
-              <div className="px-4 pb-3">
-                <p className="text-sm text-gray-800 leading-relaxed">{post.content}</p>
-              </div>
-
-              {post.imageUrl && (
-                <div className="border-y bg-gray-50">
-                  <img src={post.imageUrl} alt="Post" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
-                </div>
-              )}
-
-              <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-50 flex justify-between">
-                <span>{post.likesCount} likes</span>
-                <span>{post.comments.length} comments</span>
-              </div>
-
-              <div className="px-2 py-1 flex gap-1 border-t border-gray-50">
-                <button onClick={() => handleLike(post.id)} className="flex items-center gap-2 flex-1 justify-center py-2 hover:bg-gray-50 rounded text-gray-600 font-bold transition text-xs">
-                  <ThumbsUp size={18} className="text-gray-400" /> Like
-                </button>
-                <button className="flex items-center gap-2 flex-1 justify-center py-2 hover:bg-gray-50 rounded text-gray-600 font-bold transition text-xs">
-                  <MessageSquare size={18} className="text-gray-400" /> Comment
-                </button>
-              </div>
+          <div className="flex justify-between items-center px-1">
+            <h2 className="text-xs font-black text-surface-400 uppercase tracking-widest">Feed Updates</h2>
+            <div className="flex gap-2">
+               <button className="text-surface-400 hover:text-brand-600 transition-colors p-1"><Filter size={16} /></button>
             </div>
-          ))}
+          </div>
+          
+          {isLoadingPosts ? (
+            <div className="grid gap-6">
+              <PostSkeleton />
+              <PostSkeleton />
+              <PostSkeleton />
+            </div>
+          ) : posts.length === 0 ? (
+            <Card className="p-16 text-center">
+                <div className="w-20 h-20 bg-brand-50 text-brand-300 rounded-full flex items-center justify-center mx-auto mb-6">
+                   <TrendingUp size={40} />
+                </div>
+                <h3 className="text-xl font-black text-surface-900 mb-2">Build your timeline</h3>
+                <p className="text-surface-500 font-medium max-w-xs mx-auto">Be the pioneer in your network and start a conversation today.</p>
+                <Button className="mt-8" variant="outline">Learn how to post</Button>
+            </Card>
+          ) : (
+            posts.map(post => (
+              <Card key={post.id} noPadding className="animate-slide-up group transition-all hover:border-surface-300">
+                <div className="p-5 flex items-center gap-4">
+                  <Link to={`/profile/${post.user.id}`} className="w-12 h-12 rounded-xl bg-brand-600 flex items-center justify-center text-white font-black overflow-hidden hover:opacity-90 transition-all shadow-sm">
+                    {post.user.profilePicture ? <img src={post.user.profilePicture} alt={post.user.name} className="w-full h-full object-cover" /> : post.user.name.charAt(0)}
+                  </Link>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <Link to={`/profile/${post.user.id}`} className="font-black text-surface-900 hover:text-brand-600 transition-colors">{post.user.name}</Link>
+                      {post.user.id === currentUser.id && (
+                        <button 
+                          onClick={() => handleDeletePost(post.id)}
+                          className="text-surface-300 hover:text-red-500 transition-colors p-1"
+                          title="Delete Post"
+                        >
+                          <svg size={16} fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                       <span className="text-[10px] text-surface-400 font-bold uppercase tracking-wide">{new Date(post.createdAt).toLocaleDateString()}</span>
+                       <span className="text-surface-300">•</span>
+                       <Badge variant="secondary" size="sm">Networking</Badge>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="px-5 pb-5">
+                  <p className="text-sm text-surface-700 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                </div>
+
+                {post.imageUrl && (
+                  <div className="bg-surface-50 border-y border-surface-100 px-2 py-2">
+                    <img src={post.imageUrl} alt="Post Content" className="w-full h-auto max-h-[512px] object-contain mx-auto rounded-lg shadow-sm" />
+                  </div>
+                )}
+
+                <div className="px-5 py-3 flex items-center justify-between border-t border-surface-50">
+                  <div className="flex -space-x-1.5 overflow-hidden">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="w-5 h-5 rounded-full border-2 border-white bg-surface-200" />
+                    ))}
+                    <span className="pl-3 text-[11px] font-bold text-surface-400">{post.likesCount} people liked this</span>
+                  </div>
+                  <button onClick={() => toggleComments(post.id)} className="text-[11px] font-bold text-surface-400 hover:text-brand-600 transition-colors">
+                    {post.comments.length} comments
+                  </button>
+                </div>
+
+                <div className="px-3 py-2 flex gap-2 border-t border-surface-50 bg-surface-50/20">
+                  <button 
+                    onClick={() => handleLike(post.id)} 
+                    className={`flex items-center gap-3 flex-1 justify-center py-2.5 hover:bg-white hover:shadow-sm rounded-xl font-black transition-all text-xs ${post.likedByCurrentUser ? 'text-brand-700 bg-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}
+                  >
+                    <ThumbsUp size={18} className={post.likedByCurrentUser ? 'fill-brand-600 text-brand-600 ring-4 ring-brand-50 rounded-full' : 'text-surface-400'} /> 
+                    {post.likedByCurrentUser ? 'Liked' : 'Like'}
+                  </button>
+                  <button 
+                    onClick={() => toggleComments(post.id)}
+                    className={`flex items-center gap-3 flex-1 justify-center py-2.5 hover:bg-white hover:shadow-sm rounded-xl font-black transition-all text-xs ${expandedComments[post.id] ? 'text-brand-700 bg-white shadow-sm' : 'text-surface-600 hover:text-surface-900'}`}
+                  >
+                    <MessageSquare size={18} className={expandedComments[post.id] ? 'fill-brand-50 text-brand-600' : 'text-surface-400'} /> 
+                    Comment
+                  </button>
+                </div>
+
+                {/* Modular Comments Section */}
+                {(expandedComments[post.id] || post.comments.length > 0) && (
+                  <div className="bg-surface-100/30 border-t border-surface-100 p-5 space-y-6 animate-in slide-in-from-top-2 duration-300">
+                    {/* Simplified Comment Input */}
+                    <div className="flex gap-4">
+                      <div className="w-9 h-9 rounded-xl bg-brand-500 text-white flex-shrink-0 flex items-center justify-center text-sm font-black overflow-hidden shadow-sm">
+                        {currentUser.profilePicture ? <img src={currentUser.profilePicture} alt="me" className="w-full h-full object-cover" /> : currentUser.name.charAt(0)}
+                      </div>
+                      <div className="flex-1 flex gap-2 items-center">
+                        <input 
+                          type="text" 
+                          placeholder="Add a comment..." 
+                          value={commentTexts[post.id] || ''}
+                          onChange={(e) => setCommentTexts({ ...commentTexts, [post.id]: e.target.value })}
+                          onKeyDown={(e) => e.key === 'Enter' && handleComment(post.id)}
+                          className="flex-1 bg-white border border-surface-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-4 focus:ring-brand-50 focus:border-brand-600 transition-all font-medium"
+                        />
+                        <button 
+                          onClick={() => handleComment(post.id)}
+                          disabled={!commentTexts[post.id]?.trim()}
+                          className="px-4 py-2 text-xs font-black text-brand-600 disabled:text-surface-300 hover:text-brand-800 transition-colors uppercase tracking-widest"
+                        >
+                          Post
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Styled Comments List */}
+                    {expandedComments[post.id] && (
+                      <div className="space-y-4">
+                        {post.comments.map(comment => (
+                          <div key={comment.id} className="flex gap-4 animate-in fade-in duration-300">
+                            <Link to={`/profile/${comment.user.id}`} className="w-9 h-9 rounded-xl bg-surface-200 flex-shrink-0 flex items-center justify-center text-xs font-black overflow-hidden border border-white shadow-sm">
+                              {comment.user.profilePicture ? <img src={comment.user.profilePicture} alt={comment.user.name} className="w-full h-full object-cover" /> : comment.user.name.charAt(0)}
+                            </Link>
+                            <div className={`flex-1 bg-white p-4 rounded-2xl rounded-tl-none border border-surface-200 shadow-premium group/comment ${comment.isOptimistic ? 'opacity-60' : ''}`}>
+                              <div className="flex justify-between items-start mb-1.5">
+                                <Link to={`/profile/${comment.user.id}`} className="text-xs font-black text-surface-900 hover:text-brand-600 transition-colors">{comment.user.name}</Link>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-surface-300 uppercase tracking-tighter">{new Date(comment.createdAt).toLocaleDateString()}</span>
+                                  {(comment.user.id === currentUser.id || post.user.id === currentUser.id) && !comment.isOptimistic && (
+                                    <button 
+                                      onClick={() => handleDeleteComment(post.id, comment.id)}
+                                      className="text-surface-200 hover:text-red-500 transition-colors"
+                                    >
+                                      <svg size={12} fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-sm text-surface-600 leading-relaxed">{comment.content}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            ))
+          )}
         </div>
       </div>
 
-      {/* Right Sidebar */}
-      <div className="hidden lg:block col-span-1">
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <h3 className="font-bold text-sm mb-4 text-gray-800">Trending Now</h3>
-          <ul className="space-y-4">
+      {/* Right Sidebar: Trending & Suggestions */}
+      <div className="hidden lg:block lg:col-span-3 space-y-6">
+        <Card className="sticky top-24">
+          <h3 className="font-black text-xs text-surface-400 uppercase tracking-widest mb-6 flex items-center justify-between">
+            Trending Hub <TrendingUp size={16} className="text-brand-600" />
+          </h3>
+          <ul className="space-y-6">
             {trendingUsers.length > 0 ? (
               trendingUsers.map(tUser => (
-                <li key={tUser.id} className="group p-2 rounded-lg transition hover:bg-gray-50">
-                  <Link to={`/profile/${tUser.id}`} className="flex items-center justify-between">
+                <li key={tUser.id}>
+                  <Link to={`/profile/${tUser.id}`} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs overflow-hidden border border-transparent group-hover:border-indigo-400 transition">
-                        {tUser.profilePicture ? <img src={tUser.profilePicture} alt={tUser.name} /> : tUser.name.charAt(0)}
+                      <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center text-brand-700 font-black text-xs overflow-hidden border-2 border-transparent group-hover:border-brand-500 transition-all shadow-sm">
+                        {tUser.profilePicture ? <img src={tUser.profilePicture} alt={tUser.name} className="w-full h-full object-cover" /> : tUser.name.charAt(0)}
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-800 group-hover:text-indigo-600 transition truncate max-w-[100px]">{tUser.name}</p>
-                        <p className="text-[10px] text-gray-400">Popular Profile</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-surface-900 group-hover:text-brand-600 transition-colors truncate">{tUser.name}</p>
+                        <p className="text-[10px] font-bold text-surface-300 uppercase tracking-widest">Growth Expert</p>
                       </div>
                     </div>
-                    <UserPlus size={14} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition" />
+                    <UserPlus size={16} className="text-brand-600 opacity-0 group-hover:opacity-100 transition-all translate-x-1 group-hover:translate-x-0" />
                   </Link>
                 </li>
               ))
             ) : (
-                <p className="text-xs text-gray-500 italic">No trending people yet.</p>
+                <p className="text-xs text-surface-400 font-medium italic">Generating trends...</p>
             )}
-            <hr className="border-gray-100" />
-            <li className="cursor-pointer group px-2">
-               <p className="text-xs font-bold text-gray-800 group-hover:text-indigo-600 transition">#PostAppReleases</p>
-               <p className="text-[10px] text-gray-400">12.5K posts</p>
+            <hr className="border-surface-100" />
+            <li className="cursor-pointer group flex flex-col gap-1">
+               <div className="flex justify-between items-center text-sm font-black text-surface-900 group-hover:text-brand-600 transition-colors">
+                  <span>#PostAppPremium</span>
+                  <Badge variant="primary" size="sm">Hot</Badge>
+               </div>
+               <p className="text-[10px] font-bold text-surface-400 uppercase tracking-widest">12.5K active discussions</p>
             </li>
           </ul>
+        </Card>
+        
+        <div className="px-4">
+           <p className="text-[10px] font-black text-surface-400 uppercase tracking-[2px] leading-relaxed">
+             PostApp Premium Product © 2026. <br/> Built for professional growth.
+           </p>
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Profile Modification Modal */}
       {isEditModalOpen && (
         <EditProfileModal 
           user={currentUser} 

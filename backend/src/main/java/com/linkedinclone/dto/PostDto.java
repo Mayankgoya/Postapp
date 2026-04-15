@@ -1,6 +1,5 @@
 package com.linkedinclone.dto;
 
-import com.linkedinclone.entity.Comment;
 import com.linkedinclone.entity.Post;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +17,7 @@ public class PostDto {
     private UserDto user;
     private LocalDateTime createdAt;
     private int likesCount;
+    private boolean likedByCurrentUser;
     private List<CommentDto> comments;
 
     public PostDto(Post post) {
@@ -30,20 +30,10 @@ public class PostDto {
         this.comments = post.getComments() != null ? 
                 post.getComments().stream().map(CommentDto::new).collect(Collectors.toList()) : List.of();
     }
-}
 
-@Data
-@NoArgsConstructor
-class CommentDto {
-    private Long id;
-    private String content;
-    private UserDto user;
-    private LocalDateTime createdAt;
-
-    public CommentDto(Comment comment) {
-        this.id = comment.getId();
-        this.content = comment.getContent();
-        this.user = new UserDto(comment.getUser());
-        this.createdAt = comment.getCreatedAt();
+    public PostDto(Post post, boolean likedByCurrentUser) {
+        this(post);
+        this.likedByCurrentUser = likedByCurrentUser;
     }
 }
+

@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { Camera, Save, X } from 'lucide-react';
 import api from '../services/api';
+import Modal from './ui/Modal';
+import Button from './ui/Button';
+import Input from './ui/Input';
+import TextArea from './ui/TextArea';
 
 const EditProfileModal = ({ user, onClose, onUpdate }) => {
   const [formData, setFormData] = useState({
@@ -51,81 +55,106 @@ const EditProfileModal = ({ user, onClose, onUpdate }) => {
       onClose();
     } catch (err) {
       console.error("Failed to update profile", err);
-      alert("Error updating profile");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-xl font-bold">Edit Profile</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
-            <X size={24} />
-          </button>
+    <Modal 
+      isOpen={true} 
+      onClose={onClose} 
+      title="Professional Profile Update"
+      maxWidth="max-w-xl"
+      footer={
+        <>
+          <Button onClick={handleSubmit} disabled={loading} loading={loading} className="flex-1" leftIcon={Save}>
+            Save Modifications
+          </Button>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
+            Abort
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1">Full Identity Name</label>
+          <Input 
+            type="text" 
+            name="name" 
+            value={formData.name} 
+            onChange={handleChange} 
+            required 
+            placeholder="Your legal or brand name"
+          />
         </div>
         
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1">Professional Narrative</label>
+          <TextArea 
+            name="bio" 
+            value={formData.bio} 
+            onChange={handleChange} 
+            rows="4"
+            placeholder="Describe your professional journey and value proposition..."
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1">Hard & Soft Skills</label>
+          <Input 
+            type="text" 
+            name="skills" 
+            value={formData.skills} 
+            onChange={handleChange}
+            placeholder="React, Growth Hacking, Distributed Systems..."
+          />
+          <p className="text-[10px] text-surface-400 font-medium italic mt-1">Separate keywords with commas for optimal indexing.</p>
+        </div>
+
+        <div className="space-y-4 pt-2">
+          <label className="text-[10px] font-black text-surface-400 uppercase tracking-widest pl-1 flex items-center gap-2">
+            <Camera size={14} className="text-brand-600" /> Identity Visualization
+          </label>
+          <div className="bg-surface-50 border-2 border-dashed border-surface-200 rounded-2xl p-6 transition-all hover:bg-white hover:border-brand-200 group">
             <input 
-              type="text" name="name" value={formData.name} onChange={handleChange} required
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+              type="file" 
+              accept="image/*" 
+              onChange={handleChange}
+              className="hidden"
+              id="modal-avatar-upload"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-            <textarea 
-              name="bio" value={formData.bio} onChange={handleChange} rows="3"
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="Tell us about yourself..."
-            ></textarea>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Skills (comma separated)</label>
-            <input 
-              type="text" name="skills" value={formData.skills} onChange={handleChange}
-              className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-              placeholder="React, Java, Design..."
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Profile Picture</label>
-            <div className="space-y-3">
-              <input 
-                type="file" accept="image/*" onChange={handleChange}
-                className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-              />
-              <div className="flex items-center gap-4 text-gray-400">
-                <hr className="flex-1" /> <span className="text-[10px] font-bold">OR</span> <hr className="flex-1" />
+            <label 
+              htmlFor="modal-avatar-upload"
+              className="flex flex-col items-center justify-center gap-2 cursor-pointer"
+            >
+              <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-surface-400 group-hover:text-brand-600 transition-colors">
+                <Camera size={24} />
               </div>
-              <input 
-                type="text" name="profilePicture" value={formData.profilePicture} onChange={handleChange}
-                className="w-full border rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                placeholder="Paste Image URL..."
-              />
-            </div>
+              <span className="text-xs text-surface-500 font-bold">
+                {formData.imageFile ? formData.imageFile.name : 'Upload New Portrait'}
+              </span>
+            </label>
           </div>
           
-          <div className="pt-4 flex justify-end space-x-3">
-            <button 
-              type="button" onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-            >
-              Cancel
-            </button>
-            <button 
-              type="submit" disabled={loading}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-indigo-700 transition disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
+          <div className="relative flex items-center gap-4 py-2">
+            <hr className="flex-1 border-surface-100" />
+            <span className="text-[10px] font-black text-surface-300 uppercase tracking-widest">OR</span>
+            <hr className="flex-1 border-surface-100" />
           </div>
-        </form>
-      </div>
-    </div>
+
+          <Input 
+            type="text" 
+            name="profilePicture" 
+            value={formData.profilePicture} 
+            onChange={handleChange}
+            placeholder="Digital Image Direct URL (CDN Link)"
+            className="text-xs"
+          />
+        </div>
+      </form>
+    </Modal>
   );
 };
 

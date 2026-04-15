@@ -19,6 +19,7 @@ public class Post {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @jakarta.validation.constraints.NotBlank(message = "Post content cannot be empty")
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 

@@ -1,4 +1,3 @@
-import axios from 'react'; // Actually, let's use the default export logic
 import baseAxios from 'axios';
 
 const api = baseAxios.create({
@@ -13,4 +12,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      // Only redirect if not already on login page to avoid loops
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    
+    // Extract precise error message for UI
+    const message = error.response?.data?.message || error.message || 'An unexpected error occurred';
+    error.friendlyMessage = message;
+    
+    return Promise.reject(error);
+  }
+);
+
 export default api;
+

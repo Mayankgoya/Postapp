@@ -2,33 +2,39 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { User, Info, Users, ThumbsUp, MessageSquare, MoreHorizontal, Camera, Edit, Settings, X, Save, Upload } from 'lucide-react';
+import { User, Info, Users, ThumbsUp, MessageSquare, MoreHorizontal, Camera, Edit, Save, Upload, Briefcase, MapPin, Link as LinkIcon, Calendar } from 'lucide-react';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import TextArea from '../components/ui/TextArea';
+import { ProfileSkeleton } from '../components/ui/Skeleton';
 
 const Profile = () => {
     const { userId } = useParams();
-    const { user: currentUser, login } = useAuth();
+    const { user: currentUser } = useAuth();
     const [profile, setProfile] = useState(null);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('posts');
-    const [connectionStatus, setConnectionStatus] = useState('NONE'); // NONE, PENDING, ACCEPTED
+    const [connectionStatus, setConnectionStatus] = useState('NONE'); 
     const [connections, setConnections] = useState([]);
 
-    
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editData, setEditData] = useState({ name: '', bio: '', skills: '' });
     const [isSaving, setIsSaving] = useState(false);
 
-    // File Input Refs
     const avatarInputRef = useRef(null);
     const coverInputRef = useRef(null);
 
     const getImageUrl = (url) => {
         if (!url) return null;
         if (url.startsWith('http') || url.startsWith('blob:')) return url;
-        return `http://localhost:8081${url.startsWith('/') ? '' : '/'}${url}`;
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8081';
+        return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
     };
 
     useEffect(() => {
@@ -52,17 +58,16 @@ const Profile = () => {
             const postsRes = await api.get(`/posts/user/${targetId}`);
             setPosts(postsRes.data);
 
-            if (userId && userId !== currentUser?.id) {
+            if (userId && parseInt(userId) !== currentUser?.id) {
                 const statusRes = await api.get(`/connections/status/${userId}`);
                 setConnectionStatus(statusRes.data);
             }
 
-            // Fetch Connections for this profile
             const connEndpoint = userId ? `/connections/user/${userId}` : '/connections';
             const connRes = await api.get(connEndpoint);
             setConnections(connRes.data);
         } catch (error) {
-            console.error("Error fetching profile data:", error);
+            console.error("Error fetching profile:", error);
             setError(error.response?.data?.message || "Failed to load profile data.");
         } finally {
             setLoading(false);
@@ -86,12 +91,8 @@ const Profile = () => {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setProfile(res.data);
-            // If it was the current user's profile, update auth context if needed
-            if (!userId) {
-                // update local storage/context if necessary
-            }
         } catch (err) {
-            alert("Failed to upload image");
+            console.error(err);
         }
     };
 
@@ -109,67 +110,98 @@ const Profile = () => {
             setProfile(res.data);
             setIsEditModalOpen(false);
         } catch (err) {
-            alert("Failed to save profile");
+            console.error(err);
         } finally {
             setIsSaving(false);
         }
     };
 
-    const handleConnect = async () => {
-        if (connectionStatus !== 'NONE') return;
+    const handleLike = async (postId) => {
+        const post = posts.find(p => p.id === postId);
+        if (!post) return;
+
+        const originalPosts = [...posts];
+        const isLiking = !post.likedByCurrentUser;
+        const updatedPost = {
+            ...post,
+            likedByCurrentUser: isLiking,
+            likesCount: isLiking ? post.likesCount + 1 : Math.max(0, post.likesCount - 1)
+        };
+        setPosts(posts.map(p => p.id === postId ? updatedPost : p));
+
         try {
-            await api.post(`/connections/request/${userId}`);
-            setConnectionStatus('PENDING');
+            const res = await api.post(`/posts/${postId}/like`);
+            setPosts(posts.map(p => p.id === postId ? res.data : p));
         } catch (err) {
-            alert("Failed to send connection request");
+            console.error(err);
+            setPosts(originalPosts);
+            alert("Connection error: Reaction unsynced.");
         }
     };
 
-    if (loading) return <div className="flex items-center justify-center min-h-[60vh] text-gray-500 font-medium animate-pulse text-lg">Loading Profile...</div>;
+    const handleDeletePost = async (postId) => {
+        if (!window.confirm("Permanently archive this post?")) return;
+        
+        const originalPosts = [...posts];
+        setPosts(posts.filter(p => p.id !== postId));
+
+        try {
+            await api.delete(`/posts/${postId}`);
+        } catch (err) {
+            console.error(err);
+            setPosts(originalPosts);
+            alert("Modification unauthorized or server offline.");
+        }
+    };
+
+    if (loading) return <ProfileSkeleton />;
     
     if (error) return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-red-500 text-center space-y-4">
-            <h2 className="text-2xl font-bold">Oops!</h2>
-            <p className="text-gray-600 max-w-sm">{error}</p>
-            <Link to="/" className="text-indigo-600 font-bold hover:underline">Return Home</Link>
-        </div>
+        <Card className="max-w-md mx-auto mt-20 p-12 text-center animate-slide-up">
+            <h2 className="text-3xl font-black text-surface-900 mb-4">Connection Lost</h2>
+            <p className="text-surface-500 font-medium mb-8 leading-relaxed">{error}</p>
+            <Button as={Link} to="/" variant="primary" className="w-full py-4">Return to Landing</Button>
+        </Card>
     );
     
-    if (!profile) return <div className="flex items-center justify-center min-h-[60vh] text-red-500 font-bold">Profile not found</div>;
+    if (!profile) return null;
 
     const isOwnProfile = !userId || parseInt(userId) === currentUser?.id;
 
     return (
-        <div className="max-w-5xl mx-auto pb-10 animate-in fade-in duration-500 px-4">
-            {/* Header Section (Facebook Style Refined) */}
-            <div className="bg-white rounded-b-xl shadow-sm border-x border-b overflow-hidden">
-                {/* Cover Photo */}
-                <div className="h-48 md:h-80 bg-gray-200 relative group">
+        <div className="max-w-5xl mx-auto pb-16 animate-fade-in px-4">
+            {/* Extended Header Card */}
+            <Card noPadding className="overflow-hidden border-none shadow-premium-hover">
+                {/* Immersive Cover Photo */}
+                <div className="h-56 md:h-80 bg-surface-100 relative group">
                     {profile.coverPicture ? (
                         <img src={getImageUrl(profile.coverPicture)} alt="cover" className="w-full h-full object-cover" />
                     ) : (
-                        <div className="w-full h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+                        <div className="w-full h-full bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800" />
                     )}
                     
                     {isOwnProfile && (
                         <>
                             <input type="file" ref={coverInputRef} className="hidden" onChange={(e) => handleFileChange(e, 'cover')} accept="image/*" />
-                            <button 
+                            <Button 
+                                variant="secondary" 
+                                size="sm"
                                 onClick={() => coverInputRef.current.click()}
-                                className="absolute bottom-4 right-4 bg-white/90 backdrop-blur p-2 px-4 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg hover:bg-white transition translate-y-1 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 duration-300"
+                                className="absolute bottom-6 right-6 backdrop-blur-md bg-white/80 border-none shadow-2xl translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300"
+                                leftIcon={Camera}
                             >
-                                <Camera size={18} /> Edit Cover
-                            </button>
+                                Edit Layout
+                            </Button>
                         </>
                     )}
                 </div>
 
-                {/* Profile Pic and Basic Info (Left Aligned) */}
-                <div className="px-4 md:px-10 pb-6">
+                {/* Profile Identity Area */}
+                <div className="px-6 md:px-10 pb-8">
                     <div className="flex flex-col md:flex-row items-center md:items-end gap-6 -mt-16 md:-mt-24 mb-6">
-                        {/* Avatar */}
+                        {/* High-Resolution Avatar */}
                         <div className="relative group shrink-0">
-                            <div className="w-32 h-32 md:w-44 md:h-44 rounded-full border-4 border-white bg-indigo-600 flex items-center justify-center text-white text-6xl font-bold shadow-xl overflow-hidden relative">
+                            <div className="w-36 h-36 md:w-48 md:h-48 rounded-3xl border-8 border-white bg-brand-600 flex items-center justify-center text-white text-7xl font-black shadow-2xl overflow-hidden relative transition-transform group-hover:scale-105">
                                 {profile.profilePicture ? (
                                     <img src={getImageUrl(profile.profilePicture)} alt={profile.name} className="w-full h-full object-cover" />
                                 ) : profile.name.charAt(0)}
@@ -177,9 +209,9 @@ const Profile = () => {
                                 {isOwnProfile && (
                                     <div 
                                         onClick={() => avatarInputRef.current.click()}
-                                        className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                                        className="absolute inset-0 bg-brand-900/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer backdrop-blur-[2px]"
                                     >
-                                        <Camera size={32} className="text-white" />
+                                        <Camera size={40} className="text-white scale-90 group-hover:scale-100 transition-transform" />
                                     </div>
                                 )}
                             </div>
@@ -188,286 +220,310 @@ const Profile = () => {
                             )}
                         </div>
 
-                        {/* Name & Connections Info */}
+                        {/* Visual Hierarchy: Name & Status */}
                         <div className="flex-1 text-center md:text-left mb-2">
-                            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 leading-tight">{profile.name}</h1>
-                            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mt-2">
-                                <p className="text-gray-500 font-bold hover:underline cursor-pointer">{profile.connectionCount} connections</p>
-                                <div className="flex items-center justify-center md:justify-start -space-x-2">
-                                    {[1, 2, 3].map(i => (
-                                        <div key={i} className="w-7 h-7 rounded-full border-2 border-white bg-gray-200"></div>
-                                    ))}
-                                    <div className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-bold">+{profile.connectionCount > 3 ? profile.connectionCount - 3 : 0}</div>
+                            <div className="flex flex-col md:flex-row items-center gap-3">
+                              <h1 className="text-3xl md:text-5xl font-black text-surface-900 tracking-tight leading-none">{profile.name}</h1>
+                              <Badge variant="primary" size="lg" className="mt-1 md:mt-2">Pro Member</Badge>
+                            </div>
+                            <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 mt-4 text-surface-500 font-bold">
+                                <div className="flex items-center gap-1.5 hover:text-brand-600 transition-colors cursor-pointer">
+                                  <Users size={18} />
+                                  <span>{profile.connectionCount} Connections</span>
+                                </div>
+                                <span className="text-surface-200 hidden sm:block">|</span>
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin size={18} />
+                                  <span>Silicon Valley, CA</span>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 pb-2">
+                        {/* Priority Actions */}
+                        <div className="flex gap-3 pb-2 w-full md:w-auto">
                             {isOwnProfile ? (
                                 <>
-                                    <button 
+                                    <Button 
                                         onClick={() => setIsEditModalOpen(true)}
-                                        className="bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition flex items-center gap-2 transform active:scale-95"
+                                        className="flex-1 md:flex-none px-8 shadow-xl"
+                                        leftIcon={Edit}
                                     >
-                                        <Edit size={18} /> Edit Profile
-                                    </button>
-                                    <button className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition">
-                                        <MoreHorizontal size={20} />
-                                    </button>
+                                        Modify Profile
+                                    </Button>
+                                    <Button variant="secondary" className="px-3" leftIcon={MoreHorizontal} />
                                 </>
                             ) : (
                                 <>
-                                    <button 
+                                    <Button 
                                         onClick={handleConnect}
                                         disabled={connectionStatus !== 'NONE'}
-                                        className={`px-8 py-2.5 rounded-lg font-bold shadow-lg transition transform active:scale-95 ${
-                                            connectionStatus === 'NONE' 
-                                            ? 'bg-indigo-600 text-white shadow-indigo-100 hover:bg-indigo-700' 
-                                            : 'bg-gray-200 text-gray-500 cursor-default uppercase text-xs tracking-widest'
-                                        }`}
+                                        variant={connectionStatus === 'NONE' ? 'primary' : 'secondary'}
+                                        className="flex-1 md:flex-none px-10"
+                                        leftIcon={connectionStatus === 'NONE' ? Users : null}
                                     >
-                                        {connectionStatus === 'NONE' && 'Connect'}
-                                        {connectionStatus === 'PENDING' && 'Requested'}
-                                        {connectionStatus === 'ACCEPTED' && 'Connected'}
-                                    </button>
-                                    <button className="bg-gray-100 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-200 transition">
-                                        Message
-                                    </button>
+                                        {connectionStatus === 'NONE' ? 'Connect' : connectionStatus === 'PENDING' ? 'Requested' : 'Connected'}
+                                    </Button>
+                                    <Button variant="outline" className="flex-1 md:flex-none px-8">Message</Button>
                                 </>
                             )}
                         </div>
                     </div>
 
-                    <hr className="my-2 border-gray-100" />
-
-                    {/* Nav Tabs */}
-                    <div className="flex gap-8 overflow-x-auto no-scrollbar">
+                    {/* Sophisticated Tab Navigation */}
+                    <div className="flex gap-10 border-t border-surface-100 mt-8 overflow-x-auto no-scrollbar">
                         {['posts', 'about', 'friends'].map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`py-4 px-2 text-sm font-bold capitalize transition border-b-4 shrink-0 ${
+                                className={`py-5 px-1 text-xs font-black uppercase tracking-[2px] transition-all relative shrink-0 ${
                                     activeTab === tab 
-                                    ? 'border-indigo-600 text-indigo-600' 
-                                    : 'border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                    ? 'text-brand-600' 
+                                    : 'text-surface-400 hover:text-surface-600'
                                 }`}
                             >
                                 {tab}
+                                {activeTab === tab && (
+                                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-brand-600 rounded-full animate-in fade-in zoom-in duration-300" />
+                                )}
                             </button>
                         ))}
                     </div>
                 </div>
-            </div>
+            </Card>
 
-            {/* Layout Grid */}
+            {/* Content Grid Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
-                {/* Intro Sidebar */}
-                <div className="lg:col-span-5 space-y-6">
-                    <div className="bg-white rounded-2xl p-6 shadow-sm border sticky top-24">
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Intro</h2>
-                        <div className="space-y-5">
-                            <p className="text-center text-gray-700 text-lg leading-relaxed px-4">
-                                {profile.bio || 'Add a bio to tell the world about yourself.'}
+                {/* Professional Intro Sidebar */}
+                <div className="lg:col-span-4 space-y-6">
+                    <Card className="sticky top-24">
+                        <h2 className="text-xs font-black text-surface-400 uppercase tracking-widest mb-6">Professional Digest</h2>
+                        <div className="space-y-6">
+                            <p className="text-surface-700 text-base leading-relaxed italic font-medium">
+                                "{profile.bio || 'This professional is busy building the future.'}"
                             </p>
-                            <div className="space-y-4 pt-4 border-t border-gray-50">
-                                <div className="flex items-center gap-4 text-gray-600">
-                                    <div className="p-2 bg-gray-50 rounded-lg"><Info size={20} className="text-indigo-400" /></div>
-                                    <span className="font-medium">{profile.email}</span>
+                            <div className="space-y-4 pt-6 border-t border-surface-100">
+                                <div className="flex items-center gap-4 text-surface-600 group">
+                                    <div className="p-2.5 bg-brand-50 text-brand-600 rounded-xl transition-transform group-hover:scale-110"><Briefcase size={20} /></div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-surface-300">Role</span>
+                                      <span className="font-bold">Senior Growth Engineer</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-4 text-gray-600">
-                                    <div className="p-2 bg-gray-50 rounded-lg"><Users size={20} className="text-indigo-400" /></div>
-                                    <span className="font-medium">Managing {profile.connectionCount} professional connections</span>
+                                <div className="flex items-center gap-4 text-surface-600 group">
+                                    <div className="p-2.5 bg-brand-50 text-brand-600 rounded-xl transition-transform group-hover:scale-110"><Info size={20} /></div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-surface-300">Contact</span>
+                                      <span className="font-bold truncate max-w-[180px]">{profile.email}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-surface-600 group">
+                                    <div className="p-2.5 bg-brand-50 text-brand-600 rounded-xl transition-transform group-hover:scale-110"><Calendar size={20} /></div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-surface-300">Member Since</span>
+                                      <span className="font-bold">April 2024</span>
+                                    </div>
                                 </div>
                             </div>
-                            {isOwnProfile && (
-                                <button 
-                                    onClick={() => setIsEditModalOpen(true)}
-                                    className="w-full bg-indigo-50 text-indigo-600 py-3 rounded-xl text-sm font-bold hover:bg-indigo-100 transition mt-4"
-                                >
-                                    Edit Details
-                                </button>
-                            )}
                         </div>
-                    </div>
+                    </Card>
+                    
+                    <Card>
+                      <h2 className="text-xs font-black text-surface-400 uppercase tracking-widest mb-4">Top Skills</h2>
+                      <div className="flex flex-wrap gap-2">
+                        {profile.skills ? profile.skills.split(',').map((skill, index) => (
+                           <Badge key={index} variant="secondary" size="md">{skill.trim()}</Badge>
+                        )) : <p className="text-xs text-surface-300 font-bold italic">No skills listed.</p>}
+                      </div>
+                    </Card>
                 </div>
 
-                {/* Main Content */}
-                <div className="lg:col-span-7 space-y-6">
+                {/* Main Dynamic Workspace */}
+                <div className="lg:col-span-8 space-y-6">
                     {activeTab === 'posts' && (
                         <div className="space-y-6">
                             {posts.length > 0 ? (
                                 posts.map(post => (
-                                    <div key={post.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden transition hover:shadow-md animate-in slide-in-from-bottom duration-500">
+                                    <Card key={post.id} noPadding className="animate-slide-up group h-fit">
                                         <div className="p-5 flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-full border bg-indigo-600 flex items-center justify-center text-white font-bold overflow-hidden shadow-sm">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-brand-600 flex items-center justify-center text-white font-black overflow-hidden shadow-sm">
                                                     {profile.profilePicture ? <img src={getImageUrl(profile.profilePicture)} alt={profile.name} className="w-full h-full object-cover" /> : profile.name.charAt(0)}
                                                 </div>
                                                 <div>
-                                                    <h4 className="font-bold text-gray-900">{profile.name}</h4>
-                                                    <p className="text-xs text-gray-400 font-medium">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                                    <h4 className="font-black text-surface-900 leading-tight">{profile.name}</h4>
+                                                    <p className="text-[10px] text-surface-300 font-black uppercase tracking-widest mt-0.5">{new Date(post.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                                 </div>
                                             </div>
-                                            <button className="p-2 hover:bg-gray-50 rounded-full transition text-gray-400"><MoreHorizontal size={20} /></button>
+                                            <div className="flex items-center gap-2">
+                                                {isOwnProfile && (
+                                                    <button 
+                                                        onClick={() => handleDeletePost(post.id)}
+                                                        className="p-2.5 hover:bg-red-50 text-surface-200 hover:text-red-500 rounded-xl transition-all"
+                                                        title="Delete Post"
+                                                    >
+                                                        <svg size={18} fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                    </button>
+                                                )}
+                                                <button className="p-2.5 hover:bg-surface-50 text-surface-300 hover:text-surface-900 rounded-xl transition-all"><MoreHorizontal size={20} /></button>
+                                            </div>
                                         </div>
-                                        <div className="px-5 pb-4">
-                                            <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                                        <div className="px-6 pb-4">
+                                            <p className="text-surface-700 leading-relaxed font-medium whitespace-pre-wrap">{post.content}</p>
                                         </div>
                                         {post.imageUrl && (
-                                            <div className="px-1">
-                                                <img src={getImageUrl(post.imageUrl)} alt="content" className="w-full rounded-lg object-cover max-h-[500px]" />
+                                            <div className="px-2 pb-2">
+                                                <img src={getImageUrl(post.imageUrl)} alt="content" className="w-full rounded-2xl object-cover max-h-[600px] shadow-sm" />
                                             </div>
                                         )}
-                                        <div className="px-5 py-3 border-t border-gray-50 flex items-center gap-8">
-                                            <button className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 font-bold transition group">
-                                                <ThumbsUp size={20} className="group-hover:scale-110 transition" /> Like
+                                        <div className="px-6 py-4 border-t border-surface-50 bg-surface-50/20 flex items-center gap-10">
+                                            <button 
+                                                onClick={() => handleLike(post.id)}
+                                                className={`flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-all group ${post.likedByCurrentUser ? 'text-brand-600' : 'text-surface-400 hover:text-brand-600'}`}
+                                            >
+                                                <ThumbsUp size={20} className={`group-active:scale-125 transition-transform ${post.likedByCurrentUser ? 'fill-brand-600' : ''}`} /> 
+                                                {post.likedByCurrentUser ? 'Liked' : 'Like'}
                                             </button>
-                                            <button className="flex items-center gap-2 text-gray-500 hover:text-indigo-600 font-bold transition">
-                                                <MessageSquare size={20} /> Comment
-                                            </button>
+                                            <div className="flex items-center gap-2 text-xs font-black text-surface-400 uppercase tracking-widest">
+                                                <MessageSquare size={20} /> {post.comments?.length || 0} Comments
+                                            </div>
                                         </div>
-                                    </div>
+                                    </Card>
                                 ))
                             ) : (
-                                <div className="bg-white rounded-2xl p-16 text-center border shadow-sm">
-                                    <div className="w-24 h-24 bg-indigo-50 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Edit size={40} />
+                                <Card className="py-20 text-center flex flex-col items-center">
+                                    <div className="w-24 h-24 bg-brand-50 text-brand-300 rounded-3xl flex items-center justify-center mb-8 rotate-3 group hover:rotate-0 transition-transform">
+                                        <Edit size={48} />
                                     </div>
-                                    <h3 className="text-2xl font-bold text-gray-900 mb-2">No activity yet</h3>
-                                    <p className="text-gray-500 font-medium">Capture your professional moments and they'll appear here.</p>
-                                </div>
+                                    <h3 className="text-2xl font-black text-surface-900 mb-2 tracking-tight">Timeline is silent</h3>
+                                    <p className="text-surface-500 font-medium max-w-xs leading-relaxed">Publish your first breakthrough and start gaining traction.</p>
+                                    {isOwnProfile && <Button className="mt-8" variant="outline">Start Writing</Button>}
+                                </Card>
                             )}
                         </div>
                     )}
                     
-                    {/* Other tabs remain similar in logic but improved in styling */}
                     {activeTab === 'about' && (
-                        <div className="bg-white rounded-2xl p-8 shadow-sm border space-y-8 animate-in slide-in-from-right duration-400">
-                            <div>
-                                <h2 className="text-2xl font-extrabold text-gray-900 mb-6 border-l-4 border-indigo-600 pl-4">Skills & Endorsements</h2>
-                                <div className="flex flex-wrap gap-3">
-                                    {profile.skills ? profile.skills.split(',').map((skill, index) => (
-                                        <div key={index} className="px-5 py-2.5 bg-gray-50 text-gray-700 rounded-xl text-sm font-bold border hover:border-indigo-300 hover:bg-white transition-all cursor-default">
-                                            {skill.trim()}
-                                        </div>
-                                    )) : <p className="text-gray-400">No skills specified.</p>}
-                                </div>
-                            </div>
-                            <div className="pt-8 border-t border-gray-100">
-                                <h2 className="text-2xl font-extrabold text-gray-900 mb-6 border-l-4 border-indigo-600 pl-4">Metrics</h2>
-                                <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-6 animate-slide-up">
+                            <Card>
+                                <h2 className="text-xl font-black text-surface-900 mb-8 flex items-center gap-3">
+                                  <span className="w-1.5 h-8 bg-brand-600 rounded-full" /> Performance Architecture
+                                </h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                     {[
-                                        { label: 'Search Appearances', value: profile.searchCount },
-                                        { label: 'Total Content', value: profile.postCount }
+                                        { label: 'Weekly Profile Visits', value: profile.searchCount * 12, trend: '+12%' },
+                                        { label: 'Cumulative Posts', value: profile.postCount, trend: '+3' },
+                                        { label: 'Network Reach', value: profile.connectionCount * 85, trend: '+240' }
                                     ].map((stat, idx) => (
-                                        <div key={idx} className="bg-gray-50 p-6 rounded-2xl border text-center group hover:bg-white hover:border-indigo-200 transition-all">
-                                            <p className="text-3xl font-black text-indigo-600 mb-1">{stat.value}</p>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{stat.label}</p>
+                                        <div key={idx} className="bg-surface-50 p-6 rounded-2xl border border-surface-100 group hover:bg-white hover:shadow-premium transition-all">
+                                            <div className="flex justify-between items-start mb-2">
+                                              <p className="text-3xl font-black text-brand-600">{stat.value}</p>
+                                              <span className="text-[10px] font-black text-green-500 bg-green-50 px-1.5 py-0.5 rounded-md">{stat.trend}</span>
+                                            </div>
+                                            <p className="text-[10px] font-black text-surface-400 uppercase tracking-widest">{stat.label}</p>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </Card>
+                            <Card>
+                              <h2 className="text-xl font-black text-surface-900 mb-6 flex items-center gap-3">
+                                <span className="w-1.5 h-8 bg-brand-600 rounded-full" /> Biography
+                              </h2>
+                              <p className="text-surface-700 leading-loose font-medium">
+                                {profile.bio || "No professional biography available."}
+                              </p>
+                            </Card>
                         </div>
                     )}
 
                     {activeTab === 'friends' && (
-                        <div className="bg-white rounded-2xl p-8 shadow-sm border animate-in zoom-in duration-400">
-                            <h2 className="text-2xl font-extrabold text-gray-900 mb-8 border-l-4 border-indigo-600 pl-4">Professional Network</h2>
+                        <Card className="animate-slide-up">
+                            <h2 className="text-xl font-black text-surface-900 mb-8 flex items-center gap-3">
+                              <span className="w-1.5 h-8 bg-brand-600 rounded-full" /> Verified Network
+                            </h2>
                             {connections.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {connections.map((friend) => (
-                                        <div key={friend.id} className="flex items-center gap-4 p-5 border rounded-2xl hover:shadow-md hover:border-indigo-100 transition-all group cursor-pointer bg-white">
-                                            <div className="w-16 h-16 rounded-full bg-indigo-50 border-2 border-white shadow-sm flex items-center justify-center text-indigo-600 font-bold text-2xl group-hover:scale-105 transition">
-                                                {friend.profilePicture ? <img src={getImageUrl(friend.profilePicture)} alt={friend.name} className="w-full h-full object-cover rounded-full" /> : friend.name.charAt(0)}
+                                        <div key={friend.id} className="flex items-center gap-4 p-5 border border-surface-100 rounded-2xl hover:shadow-premium hover:border-brand-200 transition-all group bg-white">
+                                            <div className="w-14 h-14 rounded-xl bg-brand-50 border-2 border-white shadow-sm flex items-center justify-center text-brand-600 font-black text-xl group-hover:scale-105 transition-transform overflow-hidden">
+                                                {friend.profilePicture ? <img src={getImageUrl(friend.profilePicture)} alt={friend.name} className="w-full h-full object-cover" /> : friend.name.charAt(0)}
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-extrabold text-gray-900 group-hover:text-indigo-600 transition truncate">{friend.name}</p>
-                                                <p className="text-sm text-gray-500 font-bold truncate">{friend.bio || 'Professional'}</p>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-black text-surface-900 group-hover:text-brand-600 transition-colors truncate leading-tight">{friend.name}</p>
+                                                <p className="text-[10px] text-surface-400 font-bold uppercase tracking-widest truncate mt-0.5">{friend.bio || 'Pro Member'}</p>
                                             </div>
-                                            <Link to={`/profile/${friend.id}`} className="p-2 text-indigo-400 hover:text-indigo-600 transition">
-                                                <MoreHorizontal size={20} />
-                                            </Link>
+                                            <Button as={Link} to={`/profile/${friend.id}`} variant="ghost" size="sm" className="p-2 rounded-xl">
+                                                <LinkIcon size={18} />
+                                            </Button>
                                         </div>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="py-20 text-center space-y-4">
-                                    <div className="w-20 h-20 bg-indigo-50 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <div className="py-20 text-center flex flex-col items-center">
+                                    <div className="w-20 h-20 bg-brand-50 text-brand-300 rounded-full flex items-center justify-center mb-6">
                                         <Users size={32} />
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-900">No connections yet</h3>
-                                    <p className="text-gray-500 max-w-xs mx-auto">
-                                        {isOwnProfile 
-                                            ? "You haven't connected with anyone yet. Start growing your professional network to see connections here." 
-                                            : `${profile.name} doesn't have any public connections yet.`}
+                                    <h3 className="text-xl font-black text-surface-900">Isolation Zone</h3>
+                                    <p className="text-surface-500 font-medium max-w-sm mx-auto mt-2 leading-relaxed">
+                                        {isOwnProfile ? "Start connecting with professionals to break the silence." : "This network is currently private."}
                                     </p>
                                     {isOwnProfile && (
-                                        <Link to="/connections" className="inline-block bg-indigo-600 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition transform active:scale-95 mt-4">
-                                            Grow your network
-                                        </Link>
+                                        <Button as={Link} to="/connections" className="mt-8 px-10">Expand Pipeline</Button>
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </Card>
                     )}
                 </div>
             </div>
 
-            {/* Edit Profile Modal */}
-            {isEditModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-                        <div className="p-6 border-b flex justify-between items-center bg-gray-50/50">
-                            <h2 className="text-2xl font-black text-gray-900">Edit Professional Info</h2>
-                            <button onClick={() => setIsEditModalOpen(false)} className="p-2 hover:bg-white rounded-full transition shadow-sm"><X size={24} /></button>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Full Name</label>
-                                <input 
-                                    type="text" 
-                                    value={editData.name}
-                                    onChange={(e) => setEditData({...editData, name: e.target.value})}
-                                    className="w-full px-5 py-4 bg-gray-50 border rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition font-medium"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Bio / Headline</label>
-                                <textarea 
-                                    value={editData.bio}
-                                    onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                                    className="w-full px-5 py-4 bg-gray-50 border rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition font-medium min-h-[120px] resize-none"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Skills (comma separated)</label>
-                                <input 
-                                    type="text" 
-                                    value={editData.skills}
-                                    onChange={(e) => setEditData({...editData, skills: e.target.value})}
-                                    className="w-full px-5 py-4 bg-gray-50 border rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition font-medium"
-                                />
-                            </div>
-                        </div>
-                        <div className="p-6 pt-0 flex gap-3">
-                            <button 
-                                onClick={handleSaveProfile}
-                                disabled={isSaving}
-                                className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                            >
-                                {isSaving ? <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div> : <><Save size={20} /> Save Changes</>}
-                            </button>
-                            <button 
-                                onClick={() => setIsEditModalOpen(false)}
-                                className="px-8 py-4 bg-gray-100 text-gray-700 rounded-2xl font-black hover:bg-gray-200 transition"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
+            {/* Premium Refactor: Profile Modification Suite */}
+            <Modal 
+                isOpen={isEditModalOpen} 
+                onClose={() => setIsEditModalOpen(false)}
+                title="Professional Suite"
+                maxWidth="max-w-lg"
+                footer={
+                    <>
+                        <Button 
+                            onClick={handleSaveProfile}
+                            isLoading={isSaving}
+                            className="flex-1 py-4"
+                            leftIcon={Save}
+                        >
+                            Commit Changes
+                        </Button>
+                        <Button 
+                            variant="secondary"
+                            onClick={() => setIsEditModalOpen(false)}
+                            className="px-8"
+                        >
+                            Abort
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-6">
+                    <Input 
+                        label="Account Identity" 
+                        value={editData.name}
+                        onChange={(e) => setEditData({...editData, name: e.target.value})}
+                        placeholder="Legal Name"
+                    />
+                    <TextArea 
+                        label="Professional Headline" 
+                        value={editData.bio}
+                        onChange={(e) => setEditData({...editData, bio: e.target.value})}
+                        className="min-h-[120px]"
+                        placeholder="Describe your value proposition..."
+                    />
+                    <Input 
+                        label="Skill Matrix (Comma Separated)" 
+                        value={editData.skills}
+                        onChange={(e) => setEditData({...editData, skills: e.target.value})}
+                        placeholder="React, Architecture, Vision"
+                    />
                 </div>
-            )}
+            </Modal>
         </div>
     );
 };

@@ -22,33 +22,39 @@ public class PostController {
         this.fileStorageService = fileStorageService;
     }
 
-    @PostMapping(consumes = {"multipart/form-data"})
+    @PostMapping(consumes = {"multipart/form-data", "application/json"})
     public ResponseEntity<PostDto> createPost(
-            @RequestParam("content") String content,
+            @RequestParam(value = "content", required = false) String content,
+            @RequestParam(value = "imageUrl", required = false) String imageUrl,
             @RequestParam(value = "image", required = false) org.springframework.web.multipart.MultipartFile imageFile,
+            @RequestBody(required = false) PostCreateRequest jsonRequest,
             Authentication authentication) {
         
-        String imageUrl = null;
-        if (imageFile != null && !imageFile.isEmpty()) {
-            imageUrl = fileStorageService.storeFile(imageFile);
+        String finalContent = content;
+        String finalImageUrl = imageUrl;
+        
+        if (jsonRequest != null) {
+            finalContent = jsonRequest.getContent();
+            finalImageUrl = jsonRequest.getImageUrl();
         }
         
-        return ResponseEntity.ok(postService.createPost(authentication.getName(), content, imageUrl));
-    }
-
-    @PostMapping
-    public ResponseEntity<PostDto> createPostFromJson(@RequestBody PostCreateRequest postRequest, Authentication authentication) {
-        return ResponseEntity.ok(postService.createPost(authentication.getName(), postRequest.getContent(), postRequest.getImageUrl()));
+        if (imageFile != null && !imageFile.isEmpty()) {
+            finalImageUrl = fileStorageService.storeFile(imageFile);
+        }
+        
+        return ResponseEntity.ok(postService.createPost(authentication.getName(), finalContent, finalImageUrl));
     }
 
     @GetMapping
-    public ResponseEntity<List<PostDto>> getAllPosts() {
-        return ResponseEntity.ok(postService.getAllPosts());
+    public ResponseEntity<List<PostDto>> getAllPosts(Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(postService.getAllPosts(email));
     }
 
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<PostDto>> getUserPosts(@PathVariable Long userId) {
-        return ResponseEntity.ok(postService.getUserPosts(userId));
+    public ResponseEntity<List<PostDto>> getUserPosts(@PathVariable Long userId, Authentication authentication) {
+        String email = authentication != null ? authentication.getName() : null;
+        return ResponseEntity.ok(postService.getUserPosts(userId, email));
     }
 
     @PostMapping("/{postId}/like")
@@ -57,7 +63,32 @@ public class PostController {
     }
 
     @PostMapping("/{postId}/comment")
-    public ResponseEntity<PostDto> commentOnPost(@PathVariable Long postId, @RequestBody String content, Authentication authentication) {
+    public ResponseEntity<PostDto> commentOnPost(
+            @PathVariable Long postId, 
+            @RequestBody java.util.Map<String, String> payload, 
+            Authentication authentication) {
+        String content = payload.get("content");
         return ResponseEntity.ok(postService.commentOnPost(authentication.getName(), postId, content));
     }
+
+    @PutMapping("/{postId}")
+    public ResponseEntity<PostDto> updatePost(
+            @PathVariable Long postId,
+            @RequestBody java.util.Map<String, String> payload,
+            Authentication authentication) {
+        String content = payload.get("content");
+        return ResponseEntity.ok(postService.updatePost(authentication.getName(), postId, content));
+    }
+
+    @DeleteMapping("/{postId}")
+    public ResponseEntity<Void> deletePost(@PathVariable Long postId, Authentication authentication) {
+        postService.deletePost(authentication.getName(), postId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/comments/{commentId}")
+    public ResponseEntity<PostDto> deleteComment(@PathVariable Long commentId, Authentication authentication) {
+        return ResponseEntity.ok(postService.deleteComment(authentication.getName(), commentId));
+    }
 }
+
